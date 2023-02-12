@@ -37,6 +37,12 @@ var (
 		"temp":   {0}, // momentary temp
 		"temp-m": {0}, // temp history by minute
 		"temp-h": {0}, // temp history by hour
+
+		// Load average
+		"la":   {0}, // momentary temp
+		"la-m": {0}, // temp history by minute
+		"la-h": {0}, // temp history by hour
+
 	}
 
 	mx sync.Mutex
@@ -98,14 +104,20 @@ func logEveryMinute() {
 	}
 }
 
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
 // Aggregate measurements by second to data hourly
 func logEveryHour() {
 	ticker := time.NewTicker(1 * time.Hour)
 	for range ticker.C {
 		mx.Lock()
-		// !!! todo - index math: last 60 measurements, mind the range !!!
-		data["rpm-h"] = append(data["rpm-h"], sliceAvg(data["revs-m"]))
-		data["temp-h"] = append(data["temp-h"], sliceAvg(data["temp-m"]))
+		data["rpm-h"] = append(data["rpm-h"], sliceAvg(data["rpm-m"][max(0, len(data["rpm-m"])-60):len(data["rpm-m"])-1]))
+		data["temp-h"] = append(data["temp-h"], sliceAvg(data["temp-m"][max(0, len(data["temp-m"])-60):len(data["temp-m"])-1]))
 		mx.Unlock()
 
 		log.Print("Hourly \r\n")
@@ -113,9 +125,6 @@ func logEveryHour() {
 		log.Printf("Fan RPM: %d\r\n", data["rpm-h"][len(data["rpm-h"])-1])
 	}
 }
-
-// ToDo:
-// - every 10-15 min (temp-15m) ?
 
 func main() {
 	logOpts := []lgr.Option{lgr.Msec, lgr.LevelBraces, lgr.StackTraceOnError}
