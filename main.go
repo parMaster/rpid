@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"time"
@@ -15,7 +14,8 @@ var (
 	revs int
 
 	// GPIO (MCU) number Fan tachymeter connected to
-	pin rpio.Pin
+	// Tachymeter usually is a yellow wire in 3-pin fan connector
+	tach rpio.Pin
 
 	// RPi file with milliCentigrades
 	temperatureFileName = "/sys/class/thermal/thermal_zone0/temp"
@@ -39,28 +39,27 @@ func main() {
 	logOpts := []lgr.Option{lgr.Msec, lgr.LevelBraces, lgr.StackTraceOnError}
 	lgr.SetupStdLogger(logOpts...)
 
-	pin = rpio.Pin(15) // GPIO15
+	tach = rpio.Pin(15) // GPIO15
 
 	// Open and map memory to access gpio, check for errors
 	if err := rpio.Open(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		log.Fatalf("Error opening gpio: %e", err)
 	}
 
-	// Unmap gpio memory when done
+	// second - Unmap gpio memory when done
 	defer rpio.Close()
-	// Disable edge detection
-	defer pin.Detect(rpio.NoEdge)
+	// first  - Disable edge detection
+	defer tach.Detect(rpio.NoEdge)
 
 	// Config tachymeter pin
-	pin.Input()
-	pin.PullUp()
-	pin.Detect(rpio.RiseEdge)
+	tach.Input()
+	tach.PullUp()
+	tach.Detect(rpio.RiseEdge)
 
 	go logRPM()
 
 	for {
-		if pin.EdgeDetected() {
+		if tach.EdgeDetected() {
 			revs++
 		}
 	}
