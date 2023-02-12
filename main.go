@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/go-pkgz/lgr"
@@ -14,6 +15,9 @@ var (
 	// persistent revs counter
 	revs int
 
+	// persistent temperature measurement
+	temp int
+
 	// GPIO (MCU) number Fan tachymeter connected to
 	// Tachymeter usually is a yellow wire in 3-pin fan connector
 	//			GPIO15 (physical pin #10 on RPi)
@@ -22,35 +26,47 @@ var (
 	// RPi file with milliCentigrades
 	temperatureFileName = "/sys/class/thermal/thermal_zone0/temp"
 
-	// History of temperature measurements in milliCentigrades
-	minuteTemp []int
-	secondTemp []int
+	// map of historical data
+	data = map[string][]int{
+		// Fan tachymeters
+		"revs":  {0}, // momentary revs/sec
+		"rpm-m": {0}, // rpm history by minute
+		"rpm-h": {0}, // rpm history by hour
 
-	// History of RPM measurements
-	minuteRpm []int
-	secondRpm []int
+		// Temperature data in milliCentigrades
+		"temp":   {0}, // momentary temp
+		"temp-m": {0}, // temp history by minute
+		"temp-h": {0}, // temp history by hour
+	}
+
+	mx sync.Mutex
 )
 
 func logEverySecond() {
 	ticker := time.NewTicker(1 * time.Second)
-	for _ = range ticker.C {
+	for range ticker.C {
 		log.Printf("[DEBUG] Fan RPM: %d \r\n", revs)
-		secondRpm = append(secondRpm, revs)
+
+		mx.Lock()
+		data["revs"] = append(data["revs"], revs)
 		revs = 0
 
-		data, err := os.ReadFile(temperatureFileName)
+		sysTemp, err := os.ReadFile(temperatureFileName)
 		if err != nil {
 			log.Printf("[ERROR] Can't read temperature file: %e", err)
+			temp = 0
+		} else {
+			temp, err = strconv.Atoi(string(sysTemp[0 : len(sysTemp)-1]))
+			if err != nil {
+				log.Printf("[ERROR] Converting temp data: %e", err)
+			}
 		}
 
-		temp, err := strconv.Atoi(string(data[0 : len(data)-1]))
-		if err != nil {
-			log.Printf("[ERROR] Converting temp data: %e", err)
-		}
+		data["temp"] = append(data["temp"], temp)
+		mx.Unlock()
 
-		log.Printf("[DEBUG] Temperature raw: %s\r\n", data)
+		log.Printf("[DEBUG] Temperature raw: %s\r\n", sysTemp)
 		log.Printf("[DEBUG] Temperature (milli˚C): %d\r\n", temp)
-		secondTemp = append(secondTemp, temp)
 	}
 }
 
@@ -68,21 +84,42 @@ func sliceAvg(slice []int) int {
 // Aggregate measurements by second to data by minute
 func logEveryMinute() {
 	ticker := time.NewTicker(1 * time.Minute)
-	for _ = range ticker.C {
-		minuteRpm = append(minuteRpm, sliceAvg(secondRpm))
-		secondRpm = []int{}
+	for range ticker.C {
+		mx.Lock()
+		data["rpm-m"] = append(data["rpm-m"], sliceAvg(data["revs"]))
+		data["revs"] = []int{}
 
-		minuteTemp = append(minuteTemp, sliceAvg(secondTemp))
-		secondTemp = []int{}
+		data["temp-m"] = append(data["temp-m"], sliceAvg(data["temp"]))
+		data["temp"] = []int{}
+		mx.Unlock()
 
-		log.Printf("Temperature (milli˚C): %d\r\n", minuteTemp[len(minuteTemp)-1])
-		log.Printf("Fan RPM: %d\r\n", minuteRpm[len(minuteRpm)-1])
+		log.Printf("Temperature (milli˚C): %d\r\n", data["temp-m"][len(data["temp-m"])-1])
+		log.Printf("Fan RPM: %d\r\n", data["rpm-m"][len(data["rpm-m"])-1])
 	}
 }
 
+// Aggregate measurements by second to data hourly
+func logEveryHour() {
+	ticker := time.NewTicker(1 * time.Hour)
+	for range ticker.C {
+		mx.Lock()
+		// !!! todo - index math: last 60 measurements, mind the range !!!
+		data["rpm-h"] = append(data["rpm-h"], sliceAvg(data["revs-m"]))
+		data["temp-h"] = append(data["temp-h"], sliceAvg(data["temp-m"]))
+		mx.Unlock()
+
+		log.Print("Hourly \r\n")
+		log.Printf("Temperature (milli˚C): %d\r\n", data["temp-h"][len(data["temp-h"])-1])
+		log.Printf("Fan RPM: %d\r\n", data["rpm-h"][len(data["rpm-h"])-1])
+	}
+}
+
+// ToDo:
+// - every 10-15 min (temp-15m) ?
+
 func main() {
-	// logOpts := []lgr.Option{lgr.Msec, lgr.LevelBraces, lgr.StackTraceOnError}
-	logOpts := []lgr.Option{lgr.Msec, lgr.LevelBraces, lgr.StackTraceOnError, lgr.Debug}
+	logOpts := []lgr.Option{lgr.Msec, lgr.LevelBraces, lgr.StackTraceOnError}
+	// logOpts := []lgr.Option{lgr.Msec, lgr.LevelBraces, lgr.StackTraceOnError, lgr.Debug}
 	lgr.SetupStdLogger(logOpts...)
 
 	// Open and map memory to access gpio, check for errors
@@ -102,6 +139,7 @@ func main() {
 
 	go logEverySecond()
 	go logEveryMinute()
+	go logEveryHour()
 
 	log.Printf("Logger started")
 	for {
