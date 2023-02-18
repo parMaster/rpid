@@ -8,7 +8,10 @@ import (
 	"time"
 
 	"github.com/go-pkgz/lgr"
-	"github.com/stianeikeland/go-rpio/v4"
+	"periph.io/x/conn/v3/gpio"
+	"periph.io/x/conn/v3/gpio/gpioreg"
+	"periph.io/x/conn/v3/physic"
+	"periph.io/x/host/v3"
 )
 
 var (
@@ -20,8 +23,9 @@ var (
 
 	// GPIO (MCU) number Fan tachymeter connected to
 	// Tachymeter usually is a yellow wire in 3-pin fan connector
-	//			GPIO15 (physical pin #10 on RPi)
-	tach rpio.Pin = 15
+	//				GPIO15 (physical pin #10 on RPi)
+	tachPin string = "GPIO15"
+	tach    gpio.PinIn
 
 	// RPi file with milliCentigrades
 	temperatureFileName = "/sys/class/thermal/thermal_zone0/temp"
@@ -51,10 +55,10 @@ var (
 func logEverySecond() {
 	ticker := time.NewTicker(1 * time.Second)
 	for range ticker.C {
-		log.Printf("[DEBUG] Fan RPM: %d \r\n", revs)
+		log.Printf("[DEBUG] Fan RPS(RPM): %d(%d) \r\n", revs, revs*60)
 
 		mx.Lock()
-		data["revs"] = append(data["revs"], revs)
+		data["revs"] = append(data["revs"], revs*60)
 		revs = 0
 
 		sysTemp, err := os.ReadFile(temperatureFileName)
@@ -99,7 +103,7 @@ func logEveryMinute() {
 		data["temp"] = []int{}
 		mx.Unlock()
 
-		log.Printf("Temperature (milli˚C): %d\r\n", data["temp-m"][len(data["temp-m"])-1])
+		log.Printf("CPU Temp (milli˚C): %d\r\n", data["temp-m"][len(data["temp-m"])-1])
 		log.Printf("Fan RPM: %d\r\n", data["rpm-m"][len(data["rpm-m"])-1])
 	}
 }
@@ -121,41 +125,94 @@ func logEveryHour() {
 		mx.Unlock()
 
 		log.Print("Hourly \r\n")
-		log.Printf("Temperature (milli˚C): %d\r\n", data["temp-h"][len(data["temp-h"])-1])
+		log.Printf("CPU Temp (milli˚C): %d\r\n", data["temp-h"][len(data["temp-h"])-1])
 		log.Printf("Fan RPM: %d\r\n", data["rpm-h"][len(data["rpm-h"])-1])
 	}
 }
+
+func writeLog() {
+
+	// now := time.Now()
+	// dt := now.Format("2006-01-02")
+
+	// dt2 := now.Format("2006-01-02 15:04:05")
+
+	// // To start, here's how to dump a string (or just
+	// // bytes) into a file.
+	// d1 := []byte("hello\ngo11\n" + dt2)
+	// err := ioutil.WriteFile("/Users/my/Documents/work/src/logs/log-"+dt+".log", d1, 0644)
+	// check(err)
+
+	// // For more granular writes, open a file for writing.
+	// f, err := os.Create("/Users/my/Documents/work/src/logs/log1.log")
+	// check(err)
+
+	// // It's idiomatic to defer a `Close` immediately
+	// // after opening a file.
+	// defer f.Close()
+
+	// // You can `Write` byte slices as you'd expect.
+	// d2 := []byte{115, 111, 109, 101, 10}
+	// n2, err := f.Write(d2)
+	// check(err)
+	// fmt.Printf("wrote %d bytes\n", n2)
+
+	// // A `WriteString` is also available.
+	// n3, err := f.WriteString("writes\n" + dt)
+	// fmt.Printf("wrote %d bytes\n", n3)
+
+	// // Issue a `Sync` to flush writes to stable storage.
+	// f.Sync()
+
+	// // `bufio` provides buffered writers in addition
+	// // to the buffered readers we saw earlier.
+	// w := bufio.NewWriter(f)
+	// n4, err := w.WriteString("buffered\n")
+	// fmt.Printf("wrote %d bytes\n", n4)
+
+	// // Use `Flush` to ensure all buffered operations have
+	// // been applied to the underlying writer.
+	// w.Flush()
+}
+
+const (
+	HectoPascal physic.Pressure = 100 * physic.Pascal
+)
 
 func main() {
 	logOpts := []lgr.Option{lgr.Msec, lgr.LevelBraces, lgr.StackTraceOnError}
 	// logOpts := []lgr.Option{lgr.Msec, lgr.LevelBraces, lgr.StackTraceOnError, lgr.Debug}
 	lgr.SetupStdLogger(logOpts...)
 
-	// Open and map memory to access gpio, check for errors
-	if err := rpio.Open(); err != nil {
-		log.Fatalf("Error opening gpio: %e", err)
+	// prepareAndReadBMP280()
+
+	// Load peripheral drivers
+	if _, err := host.Init(); err != nil {
+		log.Fatal(err)
 	}
 
-	// second - Unmap gpio memory when done
-	defer rpio.Close()
-	// first  - Disable edge detection
-	defer tach.Detect(rpio.NoEdge)
+	// Lookup a pin by its number
+	tach = gpioreg.ByName(tachPin)
+	if tach == nil {
+		log.Fatalf("Failed to find %s", tachPin)
+	}
 
-	// Config tachymeter pin
-	tach.Input()
-	tach.PullUp()
-	tach.Detect(rpio.RiseEdge)
+	// Set it as input, with an internal pull-up resistor:
+	if err := tach.In(gpio.PullUp, gpio.RisingEdge); err != nil {
+		log.Fatal(err)
+	}
+
+	log.Printf("[DEBUG] tach %s: %s\n", tach, tach.Function())
 
 	go logEverySecond()
 	go logEveryMinute()
 	go logEveryHour()
 
 	log.Printf("Logger started")
+	// Counting revs
 	for {
-		// Counting every rev
-		if tach.EdgeDetected() {
-			revs++
-		}
+		tach.WaitForEdge(-1)
+		revs++
 	}
 
 }
