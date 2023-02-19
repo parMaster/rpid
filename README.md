@@ -11,4 +11,3 @@ crwxrwxrwx 1 root dialout 510, 0 Feb 12 02:56 /dev/gpiomem
 > sudo adduser pi dialout
 > sudo reboot
 ```
-
