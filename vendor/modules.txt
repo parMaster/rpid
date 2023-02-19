@@ -1,8 +1,8 @@
 # github.com/go-pkgz/lgr v0.10.4
 ## explicit; go 1.15
 github.com/go-pkgz/lgr
-# github.com/stianeikeland/go-rpio/v4 v4.6.0
-## explicit; go 1.15
+# github.com/stretchr/testify v1.8.1
+## explicit; go 1.13
 # periph.io/x/conn/v3 v3.7.0
 ## explicit; go 1.17
 periph.io/x/conn/v3

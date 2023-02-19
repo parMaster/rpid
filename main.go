@@ -14,70 +14,149 @@ import (
 	"periph.io/x/host/v3"
 )
 
-var (
+type historical map[string][]int
+
+const (
+	HectoPascal physic.Pressure = 100 * physic.Pascal
+)
+
+type Worker struct {
 	// persistent revs counter
 	revs int
 
 	// persistent temperature measurement
 	temp int
 
-	// GPIO (MCU) number Fan tachymeter connected to
+	// GPIO Fan tachymeter connected to
 	// Tachymeter usually is a yellow wire in 3-pin fan connector
-	//				GPIO15 (physical pin #10 on RPi)
-	tachPin string = "GPIO15"
+	tachPin string
 	tach    gpio.PinIn
 
-	// RPi file with milliCentigrades
-	temperatureFileName = "/sys/class/thermal/thermal_zone0/temp"
+	// RPi file with milliCentigrades of CPU temperature
+	temperatureFileName string
 
 	// map of historical data
-	data = map[string][]int{
+	data historical
+
+	mx sync.Mutex
+}
+
+func StartNewWorker() *Worker {
+
+	data := historical{
 		// Fan tachymeters
 		"revs":  {0}, // momentary revs/sec
 		"rpm-m": {0}, // rpm history by minute
 		"rpm-h": {0}, // rpm history by hour
 
-		// Temperature data in milliCentigrades
+		// CPU Temperature in milliCentigrades
 		"temp":   {0}, // momentary temp
 		"temp-m": {0}, // temp history by minute
 		"temp-h": {0}, // temp history by hour
 
-		// Load average
-		"la":   {0}, // momentary temp
-		"la-m": {0}, // temp history by minute
-		"la-h": {0}, // temp history by hour
+		// Ambient temperature from BMP280
+		"amb-temp-m": {0}, // by minute
+		"amb-temp-h": {0}, // by hour
 
+		// Atmospheric pressure from BMP280 in hPa
+		"press-m": {0},
+		"press-h": {0},
 	}
 
-	mx sync.Mutex
-)
+	w := &Worker{
+		data:                data,
+		tachPin:             "GPIO15",
+		temperatureFileName: "/sys/class/thermal/thermal_zone0/temp",
+	}
+	// Lookup a pin by its number
+	w.tach = gpioreg.ByName(w.tachPin)
+	if w.tach == nil {
+		log.Fatalf("Failed to find %s", w.tachPin)
+	}
 
-func logEverySecond() {
+	// Set it as input, with an internal pull-up resistor:
+	if err := w.tach.In(gpio.PullUp, gpio.RisingEdge); err != nil {
+		log.Fatal(err)
+	}
+
+	log.Printf("[DEBUG] tach %s: %s\n", w.tach, w.tach.Function())
+
+	go w.logEverySecond()
+	go w.logEveryMinute()
+	go w.logEveryHour()
+
+	log.Printf("Logger started")
+	// Counting revs
+	for {
+		w.tach.WaitForEdge(-1)
+		w.revs++
+	}
+}
+
+func (w *Worker) logEverySecond() {
 	ticker := time.NewTicker(1 * time.Second)
 	for range ticker.C {
-		log.Printf("[DEBUG] Fan RPS(RPM): %d(%d) \r\n", revs, revs*60)
+		log.Printf("[DEBUG] Fan RPS/RPM: %d/%d \r\n", w.revs, w.revs*60)
 
-		mx.Lock()
-		data["revs"] = append(data["revs"], revs*60)
-		revs = 0
+		w.mx.Lock()
+		w.data["revs"] = append(w.data["revs"], w.revs*60)
+		w.revs = 0
 
-		sysTemp, err := os.ReadFile(temperatureFileName)
+		sysTemp, err := os.ReadFile(w.temperatureFileName)
 		if err != nil {
 			log.Printf("[ERROR] Can't read temperature file: %e", err)
-			temp = 0
+			w.temp = 0
 		} else {
-			temp, err = strconv.Atoi(string(sysTemp[0 : len(sysTemp)-1]))
+			w.temp, err = strconv.Atoi(string(sysTemp[0 : len(sysTemp)-1]))
 			if err != nil {
 				log.Printf("[ERROR] Converting temp data: %e", err)
 			}
 		}
 
-		data["temp"] = append(data["temp"], temp)
-		mx.Unlock()
+		w.data["temp"] = append(w.data["temp"], w.temp)
+		w.mx.Unlock()
 
-		log.Printf("[DEBUG] Temperature raw: %s\r\n", sysTemp)
-		log.Printf("[DEBUG] Temperature (milli˚C): %d\r\n", temp)
+		log.Printf("[DEBUG] Temperature (milli˚C): %d\r\n", w.temp)
 	}
+}
+
+// Aggregate measurements by second to data by minute
+func (w *Worker) logEveryMinute() {
+	ticker := time.NewTicker(1 * time.Minute)
+	for range ticker.C {
+		w.mx.Lock()
+		w.data["rpm-m"] = append(w.data["rpm-m"], sliceAvg(w.data["revs"]))
+		w.data["revs"] = []int{}
+
+		w.data["temp-m"] = append(w.data["temp-m"], sliceAvg(w.data["temp"]))
+		w.data["temp"] = []int{}
+		w.mx.Unlock()
+
+		log.Printf("CPU Temp (milli˚C): %d\r\n", w.data["temp-m"][len(w.data["temp-m"])-1])
+		log.Printf("Fan RPM: %d\r\n", w.data["rpm-m"][len(w.data["rpm-m"])-1])
+	}
+}
+
+// Aggregate measurements by second to data hourly
+func (w *Worker) logEveryHour() {
+	ticker := time.NewTicker(1 * time.Hour)
+	for range ticker.C {
+		w.mx.Lock()
+		w.data["rpm-h"] = append(w.data["rpm-h"], sliceAvg(w.data["rpm-m"][max(0, len(w.data["rpm-m"])-60):len(w.data["rpm-m"])-1]))
+		w.data["temp-h"] = append(w.data["temp-h"], sliceAvg(w.data["temp-m"][max(0, len(w.data["temp-m"])-60):len(w.data["temp-m"])-1]))
+		w.mx.Unlock()
+
+		log.Print("Hourly \r\n")
+		log.Printf("CPU Temp (milli˚C): %d\r\n", w.data["temp-h"][len(w.data["temp-h"])-1])
+		log.Printf("Fan RPM: %d\r\n", w.data["rpm-h"][len(w.data["rpm-h"])-1])
+	}
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func sliceAvg(slice []int) int {
@@ -89,45 +168,6 @@ func sliceAvg(slice []int) int {
 		sum += v
 	}
 	return int(sum / len(slice))
-}
-
-// Aggregate measurements by second to data by minute
-func logEveryMinute() {
-	ticker := time.NewTicker(1 * time.Minute)
-	for range ticker.C {
-		mx.Lock()
-		data["rpm-m"] = append(data["rpm-m"], sliceAvg(data["revs"]))
-		data["revs"] = []int{}
-
-		data["temp-m"] = append(data["temp-m"], sliceAvg(data["temp"]))
-		data["temp"] = []int{}
-		mx.Unlock()
-
-		log.Printf("CPU Temp (milli˚C): %d\r\n", data["temp-m"][len(data["temp-m"])-1])
-		log.Printf("Fan RPM: %d\r\n", data["rpm-m"][len(data["rpm-m"])-1])
-	}
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-// Aggregate measurements by second to data hourly
-func logEveryHour() {
-	ticker := time.NewTicker(1 * time.Hour)
-	for range ticker.C {
-		mx.Lock()
-		data["rpm-h"] = append(data["rpm-h"], sliceAvg(data["rpm-m"][max(0, len(data["rpm-m"])-60):len(data["rpm-m"])-1]))
-		data["temp-h"] = append(data["temp-h"], sliceAvg(data["temp-m"][max(0, len(data["temp-m"])-60):len(data["temp-m"])-1]))
-		mx.Unlock()
-
-		log.Print("Hourly \r\n")
-		log.Printf("CPU Temp (milli˚C): %d\r\n", data["temp-h"][len(data["temp-h"])-1])
-		log.Printf("Fan RPM: %d\r\n", data["rpm-h"][len(data["rpm-h"])-1])
-	}
 }
 
 func writeLog() {
@@ -175,44 +215,15 @@ func writeLog() {
 	// w.Flush()
 }
 
-const (
-	HectoPascal physic.Pressure = 100 * physic.Pascal
-)
-
 func main() {
-	logOpts := []lgr.Option{lgr.Msec, lgr.LevelBraces, lgr.StackTraceOnError}
-	// logOpts := []lgr.Option{lgr.Msec, lgr.LevelBraces, lgr.StackTraceOnError, lgr.Debug}
+	// logOpts := []lgr.Option{lgr.Msec, lgr.LevelBraces, lgr.StackTraceOnError}
+	logOpts := []lgr.Option{lgr.Msec, lgr.LevelBraces, lgr.StackTraceOnError, lgr.Debug}
 	lgr.SetupStdLogger(logOpts...)
-
-	// prepareAndReadBMP280()
 
 	// Load peripheral drivers
 	if _, err := host.Init(); err != nil {
 		log.Fatal(err)
 	}
 
-	// Lookup a pin by its number
-	tach = gpioreg.ByName(tachPin)
-	if tach == nil {
-		log.Fatalf("Failed to find %s", tachPin)
-	}
-
-	// Set it as input, with an internal pull-up resistor:
-	if err := tach.In(gpio.PullUp, gpio.RisingEdge); err != nil {
-		log.Fatal(err)
-	}
-
-	log.Printf("[DEBUG] tach %s: %s\n", tach, tach.Function())
-
-	go logEverySecond()
-	go logEveryMinute()
-	go logEveryHour()
-
-	log.Printf("Logger started")
-	// Counting revs
-	for {
-		tach.WaitForEdge(-1)
-		revs++
-	}
-
+	StartNewWorker()
 }
