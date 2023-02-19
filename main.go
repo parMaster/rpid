@@ -10,7 +10,9 @@ import (
 	"github.com/go-pkgz/lgr"
 	"periph.io/x/conn/v3/gpio"
 	"periph.io/x/conn/v3/gpio/gpioreg"
+	"periph.io/x/conn/v3/i2c/i2creg"
 	"periph.io/x/conn/v3/physic"
+	"periph.io/x/devices/v3/bmxx80"
 	"periph.io/x/host/v3"
 )
 
@@ -31,6 +33,17 @@ type Worker struct {
 	// Tachymeter usually is a yellow wire in 3-pin fan connector
 	tachPin string
 	tach    gpio.PinIn
+
+	// pressure and ambient temperature data from bmp280 sensor
+	// to scan for i2c interfaces:
+	// $ i2cdetect -l
+	// i2c-4	i2c	400000002.i2c	I2C adapter
+	i2cBus string
+	// to find out address of the device
+	// $ i2cdetect -y 4
+	bmp280Addr   uint16
+	bmp280Data   physic.Env
+	bmp280Device *bmxx80.Dev
 
 	// RPi file with milliCentigrades of CPU temperature
 	temperatureFileName string
@@ -67,7 +80,10 @@ func StartNewWorker() *Worker {
 		data:                data,
 		tachPin:             "GPIO15",
 		temperatureFileName: "/sys/class/thermal/thermal_zone0/temp",
+		i2cBus:              "4",
+		bmp280Addr:          0x76,
 	}
+
 	// Lookup a pin by its number
 	w.tach = gpioreg.ByName(w.tachPin)
 	if w.tach == nil {
@@ -84,6 +100,23 @@ func StartNewWorker() *Worker {
 	go w.logEverySecond()
 	go w.logEveryMinute()
 	go w.logEveryHour()
+
+	// Preparing to read BMP280 sensor
+	if _, err := host.Init(); err != nil {
+		log.Fatal(err)
+	}
+
+	// Use i2creg I²C bus registry to find the first available I²C bus.
+	b, err := i2creg.Open(w.i2cBus)
+	if err != nil {
+		log.Fatalf("failed to open I²C: %v", err)
+	}
+	defer b.Close()
+
+	w.bmp280Device, err = bmxx80.NewI2C(b, w.bmp280Addr, &bmxx80.DefaultOpts)
+	if err != nil {
+		log.Fatalf("failed to initialize bme280: %v", err)
+	}
 
 	log.Printf("Logger started")
 	// Counting revs
@@ -124,17 +157,32 @@ func (w *Worker) logEverySecond() {
 func (w *Worker) logEveryMinute() {
 	ticker := time.NewTicker(1 * time.Minute)
 	for range ticker.C {
+
+		if err := w.bmp280Device.Sense(&w.bmp280Data); err != nil {
+			log.Fatal(err)
+		}
+		pressureHPa := w.bmp280Data.Pressure / HectoPascal
+		tempMilliC := w.bmp280Data.Temperature / 10000000
+
 		w.mx.Lock()
-		w.data["rpm-m"] = append(w.data["rpm-m"], sliceAvg(w.data["revs"]))
+		w.data["rpm-m"] = append(w.data["rpm-m"], w.sliceAvg(w.data["revs"]))
 		w.data["revs"] = []int{}
 
-		w.data["temp-m"] = append(w.data["temp-m"], sliceAvg(w.data["temp"]))
+		w.data["temp-m"] = append(w.data["temp-m"], w.sliceAvg(w.data["temp"]))
 		w.data["temp"] = []int{}
+
+		w.data["amb-temp-m"] = append(w.data["amb-temp-m"], int(tempMilliC))
+		w.data["press-m"] = append(w.data["press-m"], int(pressureHPa))
 		w.mx.Unlock()
 
 		log.Printf("CPU Temp (milli˚C): %d\r\n", w.data["temp-m"][len(w.data["temp-m"])-1])
 		log.Printf("Fan RPM: %d\r\n", w.data["rpm-m"][len(w.data["rpm-m"])-1])
+		log.Printf("BMP280 measurements: %8s | %d hPa \n", w.bmp280Data.Temperature, pressureHPa)
 	}
+}
+
+func (w *Worker) aggregateHourly(source, dest string) {
+	w.data[dest] = append(w.data[dest], w.sliceAvg(w.data[source][max(0, len(w.data[source])-60):len(w.data[source])-1]))
 }
 
 // Aggregate measurements by second to data hourly
@@ -142,13 +190,17 @@ func (w *Worker) logEveryHour() {
 	ticker := time.NewTicker(1 * time.Hour)
 	for range ticker.C {
 		w.mx.Lock()
-		w.data["rpm-h"] = append(w.data["rpm-h"], sliceAvg(w.data["rpm-m"][max(0, len(w.data["rpm-m"])-60):len(w.data["rpm-m"])-1]))
-		w.data["temp-h"] = append(w.data["temp-h"], sliceAvg(w.data["temp-m"][max(0, len(w.data["temp-m"])-60):len(w.data["temp-m"])-1]))
+		w.aggregateHourly("rpm-m", "rpm-h")
+		w.aggregateHourly("temp-m", "temp-h")
+		w.aggregateHourly("amb-temp-m", "amb-temp-h")
+		w.aggregateHourly("press-m", "press-h")
 		w.mx.Unlock()
 
 		log.Print("Hourly \r\n")
 		log.Printf("CPU Temp (milli˚C): %d\r\n", w.data["temp-h"][len(w.data["temp-h"])-1])
 		log.Printf("Fan RPM: %d\r\n", w.data["rpm-h"][len(w.data["rpm-h"])-1])
+		log.Printf("Ambient Temp (milli˚C): %d\r\n", w.data["amb-temp-h"][len(w.data["amb-temp-h"])-1])
+		log.Printf("Atmospheric pressure (hPa): %d\r\n", w.data["press-h"][len(w.data["press-h"])-1])
 	}
 }
 
@@ -159,7 +211,7 @@ func max(a, b int) int {
 	return b
 }
 
-func sliceAvg(slice []int) int {
+func (w *Worker) sliceAvg(slice []int) int {
 	if len(slice) == 0 {
 		return 0
 	}
