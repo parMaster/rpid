@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/go-pkgz/lgr"
+	"github.com/parMaster/htu21"
 	"periph.io/x/conn/v3/gpio"
 	"periph.io/x/conn/v3/gpio/gpioreg"
 	"periph.io/x/conn/v3/i2c/i2creg"
@@ -45,6 +46,11 @@ type Worker struct {
 	bmp280Data   physic.Env
 	bmp280Device *bmxx80.Dev
 
+	// HTU21 sensor address
+	htu21Addr   uint16
+	htu21Data   physic.Env
+	htu21Device *htu21.Dev
+
 	// RPi file with milliCentigrades of CPU temperature
 	temperatureFileName string
 
@@ -58,22 +64,26 @@ func StartNewWorker() *Worker {
 
 	data := historical{
 		// Fan tachymeters
-		"revs":  {0}, // momentary revs/sec
-		"rpm-m": {0}, // rpm history by minute
-		"rpm-h": {0}, // rpm history by hour
+		"revs":  {}, // momentary revs/sec
+		"rpm-m": {}, // rpm history by minute
+		"rpm-h": {}, // rpm history by hour
 
 		// CPU Temperature in milliCentigrades
-		"temp":   {0}, // momentary temp
-		"temp-m": {0}, // temp history by minute
-		"temp-h": {0}, // temp history by hour
+		"temp":   {}, // momentary temp
+		"temp-m": {}, // temp history by minute
+		"temp-h": {}, // temp history by hour
 
 		// Ambient temperature from BMP280
-		"amb-temp-m": {0}, // by minute
-		"amb-temp-h": {0}, // by hour
+		"amb-temp-m": {}, // by minute
+		"amb-temp-h": {}, // by hour
 
 		// Atmospheric pressure from BMP280 in hPa
-		"press-m": {0},
-		"press-h": {0},
+		"press-m": {},
+		"press-h": {},
+
+		// Relative humidity from HTU21 in mRh (0.1%)
+		"rh-m": {},
+		"rh-h": {},
 	}
 
 	w := &Worker{
@@ -82,6 +92,7 @@ func StartNewWorker() *Worker {
 		temperatureFileName: "/sys/class/thermal/thermal_zone0/temp",
 		i2cBus:              "4",
 		bmp280Addr:          0x76,
+		htu21Addr:           0x40,
 	}
 
 	// Lookup a pin by its number
@@ -116,6 +127,11 @@ func StartNewWorker() *Worker {
 	w.bmp280Device, err = bmxx80.NewI2C(b, w.bmp280Addr, &bmxx80.DefaultOpts)
 	if err != nil {
 		log.Fatalf("failed to initialize bme280: %v", err)
+	}
+
+	w.htu21Device, err = htu21.NewI2C(b, w.htu21Addr)
+	if err != nil {
+		log.Fatalf("failed to initialize htu21: %v", err)
 	}
 
 	log.Printf("Logger started")
@@ -155,7 +171,7 @@ func (w *Worker) logEverySecond() {
 
 // Aggregate measurements by second to data by minute
 func (w *Worker) logEveryMinute() {
-	ticker := time.NewTicker(1 * time.Minute)
+	ticker := time.NewTicker(60 * time.Second)
 	for range ticker.C {
 
 		if err := w.bmp280Device.Sense(&w.bmp280Data); err != nil {
@@ -163,6 +179,11 @@ func (w *Worker) logEveryMinute() {
 		}
 		pressureHPa := w.bmp280Data.Pressure / HectoPascal
 		tempMilliC := w.bmp280Data.Temperature / 10000000
+
+		if err := w.htu21Device.Sense(&w.htu21Data); err != nil {
+			log.Fatal(err)
+		}
+		humidMilliRH := w.htu21Data.Humidity / 10000
 
 		w.mx.Lock()
 		w.data["rpm-m"] = append(w.data["rpm-m"], w.sliceAvg(w.data["revs"]))
@@ -173,11 +194,13 @@ func (w *Worker) logEveryMinute() {
 
 		w.data["amb-temp-m"] = append(w.data["amb-temp-m"], int(tempMilliC))
 		w.data["press-m"] = append(w.data["press-m"], int(pressureHPa))
+		w.data["rh-m"] = append(w.data["rh-m"], int(humidMilliRH))
 		w.mx.Unlock()
 
 		log.Printf("CPU Temp (milli˚C): %d\r\n", w.data["temp-m"][len(w.data["temp-m"])-1])
 		log.Printf("Fan RPM: %d\r\n", w.data["rpm-m"][len(w.data["rpm-m"])-1])
 		log.Printf("BMP280 measurements: %8s | %d hPa \n", w.bmp280Data.Temperature, pressureHPa)
+		log.Printf("HTU21 measurements: %8s | %s (%d mRh) \n", w.htu21Data.Temperature, w.htu21Data.Humidity, humidMilliRH)
 	}
 }
 
@@ -187,13 +210,14 @@ func (w *Worker) aggregateHourly(source, dest string) {
 
 // Aggregate measurements by second to data hourly
 func (w *Worker) logEveryHour() {
-	ticker := time.NewTicker(1 * time.Hour)
+	ticker := time.NewTicker(60 * time.Minute)
 	for range ticker.C {
 		w.mx.Lock()
 		w.aggregateHourly("rpm-m", "rpm-h")
 		w.aggregateHourly("temp-m", "temp-h")
 		w.aggregateHourly("amb-temp-m", "amb-temp-h")
 		w.aggregateHourly("press-m", "press-h")
+		w.aggregateHourly("rh-m", "rh-h")
 		w.mx.Unlock()
 
 		log.Print("Hourly \r\n")
@@ -201,6 +225,7 @@ func (w *Worker) logEveryHour() {
 		log.Printf("Fan RPM: %d\r\n", w.data["rpm-h"][len(w.data["rpm-h"])-1])
 		log.Printf("Ambient Temp (milli˚C): %d\r\n", w.data["amb-temp-h"][len(w.data["amb-temp-h"])-1])
 		log.Printf("Atmospheric pressure (hPa): %d\r\n", w.data["press-h"][len(w.data["press-h"])-1])
+		log.Printf("Relative Humidity (mRh): %d\r\n", w.data["rh-h"][len(w.data["rh-h"])-1])
 	}
 }
 
@@ -268,8 +293,8 @@ func writeLog() {
 }
 
 func main() {
-	// logOpts := []lgr.Option{lgr.Msec, lgr.LevelBraces, lgr.StackTraceOnError}
-	logOpts := []lgr.Option{lgr.Msec, lgr.LevelBraces, lgr.StackTraceOnError, lgr.Debug}
+	logOpts := []lgr.Option{lgr.Msec, lgr.LevelBraces, lgr.StackTraceOnError}
+	// logOpts := []lgr.Option{lgr.Msec, lgr.LevelBraces, lgr.StackTraceOnError, lgr.Debug}
 	lgr.SetupStdLogger(logOpts...)
 
 	// Load peripheral drivers
