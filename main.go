@@ -126,7 +126,7 @@ func StartNewWorker() *Worker {
 		log.Fatalf("[ERROR] failed to initialize htu21: %v", err)
 	}
 
-	log.Printf("Worker started. Fan tach on %s, trigger on %s", w.tachPin, w.fanTriggerPin)
+	log.Printf("Service started. Fan tach on %s, trigger on %s", w.tachPin, w.fanTriggerPin)
 
 	return w
 }
