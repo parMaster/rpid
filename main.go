@@ -3,14 +3,17 @@ package main
 import (
 	"log"
 	"os"
+	"os/signal"
 	"strconv"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/go-pkgz/lgr"
 	"github.com/parMaster/htu21"
 	"periph.io/x/conn/v3/gpio"
 	"periph.io/x/conn/v3/gpio/gpioreg"
+	"periph.io/x/conn/v3/i2c"
 	"periph.io/x/conn/v3/i2c/i2creg"
 	"periph.io/x/conn/v3/physic"
 	"periph.io/x/devices/v3/bmxx80"
@@ -32,14 +35,17 @@ type Worker struct {
 
 	// GPIO Fan tachymeter connected to
 	// Tachymeter usually is a yellow wire in 3-pin fan connector
-	tachPin string
-	tach    gpio.PinIn
+	tachPin       string
+	fanTriggerPin string
+	fanTrigger    gpio.PinIO
+	tach          gpio.PinIn
 
 	// pressure and ambient temperature data from bmp280 sensor
 	// to scan for i2c interfaces:
 	// $ i2cdetect -l
-	// i2c-4	i2c	400000002.i2c	I2C adapter
-	i2cBus string
+	// i2c-4	i2c	400000002.i2c	I²C adapter
+	i2cBusNumber string
+	i2cBus       i2c.BusCloser
 	// to find out address of the device
 	// $ i2cdetect -y 4
 	bmp280Addr   uint16
@@ -89,12 +95,73 @@ func StartNewWorker() *Worker {
 	w := &Worker{
 		data:                data,
 		tachPin:             "GPIO15",
+		fanTriggerPin:       "GPIO18",
 		temperatureFileName: "/sys/class/thermal/thermal_zone0/temp",
-		i2cBus:              "4",
+		i2cBusNumber:        "4",
 		bmp280Addr:          0x76,
 		htu21Addr:           0x40,
 	}
 
+	go w.controlFan()
+	go w.startTach()
+
+	go w.logEverySecond()
+	go w.logEveryMinute()
+	go w.logEveryHour()
+
+	var err error
+	w.i2cBus, err = i2creg.Open(w.i2cBusNumber)
+	if err != nil {
+		log.Fatalf("[ERROR] failed to open I²C: %v", err)
+	}
+
+	w.bmp280Device, err = bmxx80.NewI2C(w.i2cBus, w.bmp280Addr, &bmxx80.DefaultOpts)
+	if err != nil {
+		log.Fatalf("[ERROR] failed to initialize bme280: %v", err)
+	}
+
+	w.htu21Device, err = htu21.NewI2C(w.i2cBus, w.htu21Addr)
+	if err != nil {
+		log.Fatalf("[ERROR] failed to initialize htu21: %v", err)
+	}
+
+	log.Printf("Logger started")
+
+	return w
+}
+
+func (w *Worker) Halt() {
+
+	log.Println("[DEBUG] Halting tachymeter")
+	err := w.tach.Halt()
+	if err != nil {
+		log.Printf("[ERROR] Halting tachymeter: %e", err)
+	}
+
+	log.Println("[DEBUG] Closing I²C Bus")
+	w.i2cBus.Close()
+	if err != nil {
+		log.Printf("[ERROR] Closing I²C: %e", err)
+	}
+
+	log.Println("[DEBUG] Leaving the fan ON is always safer")
+	w.fanTrigger.Out(gpio.High)
+	w.fanTrigger.Halt()
+}
+
+func (w *Worker) controlFan() {
+	w.fanTrigger = gpioreg.ByName(w.fanTriggerPin)
+	if w.fanTrigger == nil {
+		log.Printf("[ERROR] Failed to find %s", w.fanTrigger)
+	}
+
+	// Setting fan High for now
+	if err := w.fanTrigger.Out(gpio.High); err != nil {
+		log.Printf("[ERROR] turning fan ON: %e", err)
+	}
+}
+
+func (w *Worker) startTach() {
 	// Lookup a pin by its number
 	w.tach = gpioreg.ByName(w.tachPin)
 	if w.tach == nil {
@@ -108,34 +175,6 @@ func StartNewWorker() *Worker {
 
 	log.Printf("[DEBUG] tach %s: %s\n", w.tach, w.tach.Function())
 
-	go w.logEverySecond()
-	go w.logEveryMinute()
-	go w.logEveryHour()
-
-	// Preparing to read BMP280 sensor
-	if _, err := host.Init(); err != nil {
-		log.Fatal(err)
-	}
-
-	// Use i2creg I²C bus registry to find the first available I²C bus.
-	b, err := i2creg.Open(w.i2cBus)
-	if err != nil {
-		log.Fatalf("failed to open I²C: %v", err)
-	}
-	defer b.Close()
-
-	w.bmp280Device, err = bmxx80.NewI2C(b, w.bmp280Addr, &bmxx80.DefaultOpts)
-	if err != nil {
-		log.Fatalf("failed to initialize bme280: %v", err)
-	}
-
-	w.htu21Device, err = htu21.NewI2C(b, w.htu21Addr)
-	if err != nil {
-		log.Fatalf("failed to initialize htu21: %v", err)
-	}
-
-	log.Printf("Logger started")
-	// Counting revs
 	for {
 		w.tach.WaitForEdge(-1)
 		w.revs++
@@ -247,54 +286,12 @@ func (w *Worker) sliceAvg(slice []int) int {
 	return int(sum / len(slice))
 }
 
-func writeLog() {
-
-	// now := time.Now()
-	// dt := now.Format("2006-01-02")
-
-	// dt2 := now.Format("2006-01-02 15:04:05")
-
-	// // To start, here's how to dump a string (or just
-	// // bytes) into a file.
-	// d1 := []byte("hello\ngo11\n" + dt2)
-	// err := ioutil.WriteFile("/Users/my/Documents/work/src/logs/log-"+dt+".log", d1, 0644)
-	// check(err)
-
-	// // For more granular writes, open a file for writing.
-	// f, err := os.Create("/Users/my/Documents/work/src/logs/log1.log")
-	// check(err)
-
-	// // It's idiomatic to defer a `Close` immediately
-	// // after opening a file.
-	// defer f.Close()
-
-	// // You can `Write` byte slices as you'd expect.
-	// d2 := []byte{115, 111, 109, 101, 10}
-	// n2, err := f.Write(d2)
-	// check(err)
-	// fmt.Printf("wrote %d bytes\n", n2)
-
-	// // A `WriteString` is also available.
-	// n3, err := f.WriteString("writes\n" + dt)
-	// fmt.Printf("wrote %d bytes\n", n3)
-
-	// // Issue a `Sync` to flush writes to stable storage.
-	// f.Sync()
-
-	// // `bufio` provides buffered writers in addition
-	// // to the buffered readers we saw earlier.
-	// w := bufio.NewWriter(f)
-	// n4, err := w.WriteString("buffered\n")
-	// fmt.Printf("wrote %d bytes\n", n4)
-
-	// // Use `Flush` to ensure all buffered operations have
-	// // been applied to the underlying writer.
-	// w.Flush()
-}
-
 func main() {
-	logOpts := []lgr.Option{lgr.Msec, lgr.LevelBraces, lgr.StackTraceOnError}
-	// logOpts := []lgr.Option{lgr.Msec, lgr.LevelBraces, lgr.StackTraceOnError, lgr.Debug}
+	logOpts := []lgr.Option{
+		// lgr.Debug,
+		lgr.LevelBraces,
+		lgr.StackTraceOnError,
+	}
 	lgr.SetupStdLogger(logOpts...)
 
 	// Load peripheral drivers
@@ -302,5 +299,13 @@ func main() {
 		log.Fatal(err)
 	}
 
-	StartNewWorker()
+	termChan := make(chan os.Signal, 1)
+	signal.Notify(termChan, syscall.SIGINT, syscall.SIGTERM)
+
+	w := StartNewWorker()
+
+	<-termChan
+
+	log.Println("Shutdown signal received\n*********************************")
+	w.Halt()
 }
