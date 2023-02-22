@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io"
 	"log"
 	"os"
 	"os/signal"
@@ -125,7 +126,7 @@ func StartNewWorker() *Worker {
 		log.Fatalf("[ERROR] failed to initialize htu21: %v", err)
 	}
 
-	log.Printf("Logger started")
+	log.Printf("Worker started. Fan tach on %s, trigger on %s", w.tachPin, w.fanTriggerPin)
 
 	return w
 }
@@ -287,10 +288,18 @@ func (w *Worker) sliceAvg(slice []int) int {
 }
 
 func main() {
+	f, err := os.OpenFile("/var/log/rpid.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		log.Printf("Error opening file: %e", err)
+	}
+	defer f.Close()
+	mw := io.MultiWriter(os.Stdout, f)
+
 	logOpts := []lgr.Option{
 		// lgr.Debug,
 		lgr.LevelBraces,
 		lgr.StackTraceOnError,
+		lgr.Out(mw),
 	}
 	lgr.SetupStdLogger(logOpts...)
 
