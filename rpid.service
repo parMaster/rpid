@@ -1,7 +1,8 @@
 [Unit]
 Description=RaspberryPi Helper Daemon 
 After=network.target
-StartLimitIntervalSec=0
+StartLimitBurst=5
+StartLimitIntervalSec=10
 
 [Service]
 Type=simple
