@@ -217,25 +217,24 @@ func (w *Worker) controlFan() {
 		}
 	}
 
-	// Setting fan High if somehow we got out of the loop ))
-	if err := w.fanControl.Out(gpio.High); err != nil {
-		log.Printf("[ERROR] turning fan ON: %e", err)
-	}
+	// turning fan ON if somehow we got out of the loop ))
+	w.setFanState(true)
 }
 
 func (w *Worker) startTach() {
-	// Lookup a pin by its number
+
 	w.tach = gpioreg.ByName(w.fanTachPin)
 	if w.tach == nil {
 		log.Fatalf("Failed to find %s", w.fanTachPin)
 	}
 
-	// Set it as input, with an internal pull-up resistor:
+	// Set pin as input, with an internal pull-up resistor:
 	if err := w.tach.In(gpio.PullUp, gpio.RisingEdge); err != nil {
 		log.Fatal(err)
 	}
 	log.Printf("[DEBUG] tach %s: %s\n", w.tach, w.tach.Function())
 
+	// Count every rev
 	for {
 		w.tach.WaitForEdge(-1)
 		w.revs++
@@ -246,10 +245,6 @@ func (w *Worker) logEverySecond() {
 	ticker := time.NewTicker(1 * time.Second)
 	for range ticker.C {
 		log.Printf("[DEBUG] Fan RPS/RPM: %d/%d \r\n", w.revs, w.revs*60)
-
-		w.mx.Lock()
-		w.data["revs"] = append(w.data["revs"], w.revs*60)
-		w.revs = 0
 
 		sysTemp, err := os.ReadFile(w.temperatureFileName)
 		if err != nil {
@@ -262,6 +257,9 @@ func (w *Worker) logEverySecond() {
 			}
 		}
 
+		w.mx.Lock()
+		w.data["revs"] = append(w.data["revs"], w.revs*60)
+		w.revs = 0
 		w.data["temp"] = append(w.data["temp"], w.temp)
 		w.mx.Unlock()
 
