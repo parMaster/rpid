@@ -10,6 +10,8 @@ Restart=always
 RestartSec=1
 User=pi
 ExecStart=/usr/bin/rpid
+StandardOutput=append:/var/log/rpid.log
+StandardError=append:/var/log/rpid.err
 
 [Install]
 WantedBy=multi-user.target

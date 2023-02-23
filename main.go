@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"os/signal"
@@ -184,15 +183,21 @@ func (w *Worker) controlFan() {
 
 	ticker := time.NewTicker(30 * time.Second)
 	for range ticker.C {
+		w.mx.Lock()
+
+		lastTemp := last(w.data["temp-m"])
+		tempAvg := 0
+		if len(w.data["temp-m"]) >= depth {
+			tempAvg = avg(w.data["temp-m"][max(0, len(w.data["temp-m"])-depth) : len(w.data["temp-m"])-1])
+		}
+		log.Printf("[DEBUG] temp avg: %d", tempAvg)
+		w.mx.Unlock()
 
 		// no data - keeping things safe and fan ON
-		if len(w.data["temp-m"]) == 0 {
+		if lastTemp == 0 {
 			w.setFanState(true)
 			continue
 		}
-
-		tempAvg := avg(w.data["temp-m"][max(0, len(w.data["temp-m"])-depth) : len(w.data["temp-m"])-1])
-		log.Printf("[DEBUG] temp avg: %d", tempAvg)
 
 		// something's wrong with data - keeping things safe and fan ON
 		if tempAvg == 0 {
@@ -201,7 +206,7 @@ func (w *Worker) controlFan() {
 		}
 
 		// turning fan ON - check every minute. Or when there's no temp data
-		if last(w.data["temp-m"]) > tempHigh {
+		if lastTemp > tempHigh {
 			w.setFanState(true)
 			continue
 		}
@@ -290,12 +295,12 @@ func (w *Worker) logEveryMinute() {
 		w.data["amb-temp-m"] = append(w.data["amb-temp-m"], int(tempMilliC))
 		w.data["press-m"] = append(w.data["press-m"], int(pressureHPa))
 		w.data["rh-m"] = append(w.data["rh-m"], int(humidMilliRH))
-		w.mx.Unlock()
 
 		log.Printf("CPU: %d m˚C\r\n", last(w.data["temp-m"]))
 		log.Printf("Fan: %d rpm\r\n", last(w.data["rpm-m"]))
 		log.Printf("BMP280: %8s | %d hPa \n", w.bmp280Data.Temperature, pressureHPa)
 		log.Printf("HTU21: %8s | %s (%d mRh) \n", w.htu21Data.Temperature, w.htu21Data.Humidity, humidMilliRH)
+		w.mx.Unlock()
 	}
 }
 
@@ -313,7 +318,6 @@ func (w *Worker) logEveryHour() {
 		w.aggregateHourly("amb-temp-m", "amb-temp-h")
 		w.aggregateHourly("press-m", "press-h")
 		w.aggregateHourly("rh-m", "rh-h")
-		w.mx.Unlock()
 
 		log.Print("*** Hourly \r\n")
 		log.Printf("CPU: %d m˚C\r\n", last(w.data["temp-h"]))
@@ -321,6 +325,7 @@ func (w *Worker) logEveryHour() {
 		log.Printf("Ambient Temp: %d m˚C\r\n", last(w.data["amb-temp-h"]))
 		log.Printf("Atmospheric pressure: %d hPa\r\n", last(w.data["press-h"]))
 		log.Printf("Relative Humidity: %d mRh\r\n", last(w.data["rh-h"]))
+		w.mx.Unlock()
 	}
 }
 
@@ -373,19 +378,10 @@ func main() {
 		os.Exit(2)
 	}
 
-	// Logging destinations
-	f, err := os.OpenFile(opts.Log, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	if err != nil {
-		log.Printf("Error opening file: %e", err)
-	}
-	defer f.Close()
-	mw := io.MultiWriter(os.Stdout, f)
-
 	// Logger setup
 	logOpts := []lgr.Option{
 		lgr.LevelBraces,
 		lgr.StackTraceOnError,
-		lgr.Out(mw),
 	}
 	if opts.Dbg {
 		logOpts = append(logOpts, lgr.Debug)
