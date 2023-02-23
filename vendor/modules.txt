@@ -9,6 +9,9 @@ github.com/parMaster/htu21
 github.com/sigurn/crc8
 # github.com/stretchr/testify v1.8.1
 ## explicit; go 1.13
+# github.com/umputun/go-flags v1.5.1
+## explicit; go 1.12
+github.com/umputun/go-flags
 # periph.io/x/conn/v3 v3.7.0
 ## explicit; go 1.17
 periph.io/x/conn/v3

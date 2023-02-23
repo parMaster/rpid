@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/go-pkgz/lgr"
 	"github.com/parMaster/htu21"
+	flags "github.com/umputun/go-flags"
 	"periph.io/x/conn/v3/gpio"
 	"periph.io/x/conn/v3/gpio/gpioreg"
 	"periph.io/x/conn/v3/i2c"
@@ -36,9 +38,9 @@ type Worker struct {
 
 	// GPIO Fan tachymeter connected to
 	// Tachymeter usually is a yellow wire in 3-pin fan connector
-	tachPin       string
-	fanTriggerPin string
-	fanTrigger    gpio.PinIO
+	fanTachPin    string
+	fanControlPin string
+	fanControl    gpio.PinIO
 	tach          gpio.PinIn
 
 	// pressure and ambient temperature data from bmp280 sensor
@@ -67,7 +69,7 @@ type Worker struct {
 	mx sync.Mutex
 }
 
-func StartNewWorker() *Worker {
+func StartNewWorker(cfg Options) *Worker {
 
 	data := historical{
 		// Fan tachymeters
@@ -95,12 +97,19 @@ func StartNewWorker() *Worker {
 
 	w := &Worker{
 		data:                data,
-		tachPin:             "GPIO15",
-		fanTriggerPin:       "GPIO18",
+		fanTachPin:          cfg.FanTachPin,
+		fanControlPin:       cfg.FanControlPin,
 		temperatureFileName: "/sys/class/thermal/thermal_zone0/temp",
-		i2cBusNumber:        "4",
+		i2cBusNumber:        cfg.I2C,
 		bmp280Addr:          0x76,
 		htu21Addr:           0x40,
+	}
+
+	var err error
+
+	// Load peripheral drivers
+	if _, err := host.Init(); err != nil {
+		log.Fatal(err)
 	}
 
 	go w.controlFan()
@@ -110,7 +119,6 @@ func StartNewWorker() *Worker {
 	go w.logEveryMinute()
 	go w.logEveryHour()
 
-	var err error
 	w.i2cBus, err = i2creg.Open(w.i2cBusNumber)
 	if err != nil {
 		log.Fatalf("[ERROR] failed to open I²C: %v", err)
@@ -126,7 +134,7 @@ func StartNewWorker() *Worker {
 		log.Fatalf("[ERROR] failed to initialize htu21: %v", err)
 	}
 
-	log.Printf("Service started. Fan tach on %s, trigger on %s", w.tachPin, w.fanTriggerPin)
+	log.Printf("Service started. Fan tach on %s, trigger on %s", w.fanTachPin, w.fanControlPin)
 
 	return w
 }
@@ -146,27 +154,27 @@ func (w *Worker) Halt() {
 	}
 
 	log.Println("[DEBUG] Leaving the fan ON is always safer")
-	w.fanTrigger.Out(gpio.High)
-	w.fanTrigger.Halt()
+	w.fanControl.Out(gpio.High)
+	w.fanControl.Halt()
 }
 
 func (w *Worker) controlFan() {
-	w.fanTrigger = gpioreg.ByName(w.fanTriggerPin)
-	if w.fanTrigger == nil {
-		log.Printf("[ERROR] Failed to find %s", w.fanTrigger)
+	w.fanControl = gpioreg.ByName(w.fanControlPin)
+	if w.fanControl == nil {
+		log.Printf("[ERROR] Failed to find %s", w.fanControl)
 	}
 
 	// Setting fan High for now
-	if err := w.fanTrigger.Out(gpio.High); err != nil {
+	if err := w.fanControl.Out(gpio.High); err != nil {
 		log.Printf("[ERROR] turning fan ON: %e", err)
 	}
 }
 
 func (w *Worker) startTach() {
 	// Lookup a pin by its number
-	w.tach = gpioreg.ByName(w.tachPin)
+	w.tach = gpioreg.ByName(w.fanTachPin)
 	if w.tach == nil {
-		log.Fatalf("Failed to find %s", w.tachPin)
+		log.Fatalf("Failed to find %s", w.fanTachPin)
 	}
 
 	// Set it as input, with an internal pull-up resistor:
@@ -294,8 +302,28 @@ func avg(slice []int) int {
 	return int(sum / len(slice))
 }
 
+type Options struct {
+	Log           string `short:"l" long:"log" env:"LOG" default:"/var/log/rpid.log" description:"log file path"`
+	FanTachPin    string `short:"t" long:"tach" env:"TACH" default:"GPIO15" description:"GPIO with fan tachymeter connected"`
+	FanControlPin string `short:"c" long:"control" env:"CONTROL" default:"GPIO18" description:"GPIO with fan control connected - base of the key transistor"`
+	I2C           string `long:"i2cbus" env:"I2C" default:"4" description:"I2C bus number"`
+	Dbg           bool   `long:"dbg" env:"DEBUG" description:"show debug info"`
+}
+
+var opts Options
+
 func main() {
-	f, err := os.OpenFile("/var/log/rpid.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	p := flags.NewParser(&opts, flags.PassDoubleDash|flags.HelpFlag)
+	if _, err := p.Parse(); err != nil {
+		if err.(*flags.Error).Type != flags.ErrHelp {
+			fmt.Printf("%v\n", err)
+			os.Exit(1)
+		}
+		p.WriteHelp(os.Stderr)
+		os.Exit(2)
+	}
+
+	f, err := os.OpenFile(opts.Log, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		log.Printf("Error opening file: %e", err)
 	}
@@ -303,22 +331,19 @@ func main() {
 	mw := io.MultiWriter(os.Stdout, f)
 
 	logOpts := []lgr.Option{
-		// lgr.Debug,
 		lgr.LevelBraces,
 		lgr.StackTraceOnError,
 		lgr.Out(mw),
 	}
-	lgr.SetupStdLogger(logOpts...)
-
-	// Load peripheral drivers
-	if _, err := host.Init(); err != nil {
-		log.Fatal(err)
+	if opts.Dbg {
+		logOpts = append(logOpts, lgr.Debug)
 	}
+	lgr.SetupStdLogger(logOpts...)
 
 	termChan := make(chan os.Signal, 1)
 	signal.Notify(termChan, syscall.SIGINT, syscall.SIGTERM)
 
-	w := StartNewWorker()
+	w := StartNewWorker(opts)
 
 	<-termChan
 
