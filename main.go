@@ -239,8 +239,8 @@ func (w *Worker) logEveryMinute() {
 
 		log.Printf("CPU Temp (milli˚C): %d\r\n", w.data["temp-m"][len(w.data["temp-m"])-1])
 		log.Printf("Fan RPM: %d\r\n", w.data["rpm-m"][len(w.data["rpm-m"])-1])
-		log.Printf("BMP280 measurements: %8s | %d hPa \n", w.bmp280Data.Temperature, pressureHPa)
-		log.Printf("HTU21 measurements: %8s | %s (%d mRh) \n", w.htu21Data.Temperature, w.htu21Data.Humidity, humidMilliRH)
+		log.Printf("BMP280: %8s | %d hPa \n", w.bmp280Data.Temperature, pressureHPa)
+		log.Printf("HTU21: %8s | %s (%d mRh) \n", w.htu21Data.Temperature, w.htu21Data.Humidity, humidMilliRH)
 	}
 }
 

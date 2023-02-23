@@ -1,4 +1,4 @@
-module github.com/parMaster/rpi-log
+module github.com/parMaster/rpid
 
 go 1.18
 
