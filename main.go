@@ -226,10 +226,10 @@ func (w *Worker) logEveryMinute() {
 		humidMilliRH := w.htu21Data.Humidity / 10000
 
 		w.mx.Lock()
-		w.data["rpm-m"] = append(w.data["rpm-m"], w.sliceAvg(w.data["revs"]))
+		w.data["rpm-m"] = append(w.data["rpm-m"], avg(w.data["revs"]))
 		w.data["revs"] = []int{}
 
-		w.data["temp-m"] = append(w.data["temp-m"], w.sliceAvg(w.data["temp"]))
+		w.data["temp-m"] = append(w.data["temp-m"], avg(w.data["temp"]))
 		w.data["temp"] = []int{}
 
 		w.data["amb-temp-m"] = append(w.data["amb-temp-m"], int(tempMilliC))
@@ -237,15 +237,15 @@ func (w *Worker) logEveryMinute() {
 		w.data["rh-m"] = append(w.data["rh-m"], int(humidMilliRH))
 		w.mx.Unlock()
 
-		log.Printf("CPU Temp (milli˚C): %d\r\n", w.data["temp-m"][len(w.data["temp-m"])-1])
-		log.Printf("Fan RPM: %d\r\n", w.data["rpm-m"][len(w.data["rpm-m"])-1])
+		log.Printf("CPU: %d m˚C\r\n", last(w.data["temp-m"]))
+		log.Printf("Fan: %d rpm\r\n", last(w.data["rpm-m"]))
 		log.Printf("BMP280: %8s | %d hPa \n", w.bmp280Data.Temperature, pressureHPa)
 		log.Printf("HTU21: %8s | %s (%d mRh) \n", w.htu21Data.Temperature, w.htu21Data.Humidity, humidMilliRH)
 	}
 }
 
 func (w *Worker) aggregateHourly(source, dest string) {
-	w.data[dest] = append(w.data[dest], w.sliceAvg(w.data[source][max(0, len(w.data[source])-60):len(w.data[source])-1]))
+	w.data[dest] = append(w.data[dest], avg(w.data[source][max(0, len(w.data[source])-60):len(w.data[source])-1]))
 }
 
 // Aggregate measurements by second to data hourly
@@ -260,12 +260,12 @@ func (w *Worker) logEveryHour() {
 		w.aggregateHourly("rh-m", "rh-h")
 		w.mx.Unlock()
 
-		log.Print("Hourly \r\n")
-		log.Printf("CPU Temp (milli˚C): %d\r\n", w.data["temp-h"][len(w.data["temp-h"])-1])
-		log.Printf("Fan RPM: %d\r\n", w.data["rpm-h"][len(w.data["rpm-h"])-1])
-		log.Printf("Ambient Temp (milli˚C): %d\r\n", w.data["amb-temp-h"][len(w.data["amb-temp-h"])-1])
-		log.Printf("Atmospheric pressure (hPa): %d\r\n", w.data["press-h"][len(w.data["press-h"])-1])
-		log.Printf("Relative Humidity (mRh): %d\r\n", w.data["rh-h"][len(w.data["rh-h"])-1])
+		log.Print("*** Hourly \r\n")
+		log.Printf("CPU: %d m˚C\r\n", last(w.data["temp-h"]))
+		log.Printf("Fan: %d rpm\r\n", last(w.data["rpm-h"]))
+		log.Printf("Ambient Temp: %d m˚C\r\n", last(w.data["amb-temp-h"]))
+		log.Printf("Atmospheric pressure: %d hPa\r\n", last(w.data["press-h"]))
+		log.Printf("Relative Humidity: %d mRh\r\n", last(w.data["rh-h"]))
 	}
 }
 
@@ -276,7 +276,14 @@ func max(a, b int) int {
 	return b
 }
 
-func (w *Worker) sliceAvg(slice []int) int {
+func last(slice []int) int {
+	if len(slice) == 0 {
+		return 0
+	}
+	return slice[len(slice)-1]
+}
+
+func avg(slice []int) int {
 	if len(slice) == 0 {
 		return 0
 	}
