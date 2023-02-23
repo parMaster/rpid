@@ -355,7 +355,6 @@ func avg(slice []int) int {
 }
 
 type Options struct {
-	Log           string `short:"l" long:"log" env:"LOG" default:"/var/log/rpid.log" description:"log file path"`
 	FanTachPin    string `long:"tach-pin" env:"TACH" default:"GPIO15" description:"GPIO with fan tachymeter connected"`
 	FanControlPin string `long:"control-pin" env:"CONTROL" default:"GPIO18" description:"GPIO with fan control connected - base of the key transistor"`
 	TempHigh      int    `long:"temp-high" env:"TEMPHIGH" default:"45" description:"Fan activation temperature"`
