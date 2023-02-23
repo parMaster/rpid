@@ -313,6 +313,7 @@ type Options struct {
 var opts Options
 
 func main() {
+	// Parsing cmd parameters
 	p := flags.NewParser(&opts, flags.PassDoubleDash|flags.HelpFlag)
 	if _, err := p.Parse(); err != nil {
 		if err.(*flags.Error).Type != flags.ErrHelp {
@@ -323,6 +324,7 @@ func main() {
 		os.Exit(2)
 	}
 
+	// Logging destinations
 	f, err := os.OpenFile(opts.Log, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		log.Printf("Error opening file: %e", err)
@@ -330,6 +332,7 @@ func main() {
 	defer f.Close()
 	mw := io.MultiWriter(os.Stdout, f)
 
+	// Logger setup
 	logOpts := []lgr.Option{
 		lgr.LevelBraces,
 		lgr.StackTraceOnError,
@@ -340,6 +343,7 @@ func main() {
 	}
 	lgr.SetupStdLogger(logOpts...)
 
+	// Graceful shutdown
 	termChan := make(chan os.Signal, 1)
 	signal.Notify(termChan, syscall.SIGINT, syscall.SIGTERM)
 
