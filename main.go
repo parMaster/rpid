@@ -42,6 +42,8 @@ type Worker struct {
 	fanControlPin string
 	fanControl    gpio.PinIO
 	tach          gpio.PinIn
+	tempHigh      int
+	tempLow       int
 
 	// pressure and ambient temperature data from bmp280 sensor
 	// to scan for i2c interfaces:
@@ -99,6 +101,8 @@ func StartNewWorker(cfg Options) *Worker {
 		data:                data,
 		fanTachPin:          cfg.FanTachPin,
 		fanControlPin:       cfg.FanControlPin,
+		tempHigh:            cfg.TempHigh,
+		tempLow:             cfg.TempLow,
 		temperatureFileName: "/sys/class/thermal/thermal_zone0/temp",
 		i2cBusNumber:        cfg.I2C,
 		bmp280Addr:          0x76,
@@ -135,6 +139,7 @@ func StartNewWorker(cfg Options) *Worker {
 	}
 
 	log.Printf("Service started. Fan tach on %s, trigger on %s", w.fanTachPin, w.fanControlPin)
+	log.Printf("Temps cfg: low=%d˚C, high=%d˚C", w.tempLow, w.tempHigh)
 
 	return w
 }
@@ -158,13 +163,56 @@ func (w *Worker) Halt() {
 	w.fanControl.Halt()
 }
 
+func (w *Worker) setFanState(state bool) error {
+	if err := w.fanControl.Out(gpio.Level(state)); err != nil {
+		log.Printf("[ERROR] Changing fan state (%v): %e", state, err)
+		return err
+	}
+	log.Printf("[DEBUG] Fan set to %v", gpio.Level(state))
+	return nil
+}
+
 func (w *Worker) controlFan() {
 	w.fanControl = gpioreg.ByName(w.fanControlPin)
 	if w.fanControl == nil {
 		log.Printf("[ERROR] Failed to find %s", w.fanControl)
 	}
 
-	// Setting fan High for now
+	depth := 3                    // minutes moving average
+	tempHigh := w.tempHigh * 1000 // fan   activation temperature m˚C
+	tempLow := w.tempLow * 1000   // fan DEactivation temperature m˚C
+
+	ticker := time.NewTicker(30 * time.Second)
+	for range ticker.C {
+
+		// no data - keeping things safe and fan ON
+		if len(w.data["temp-m"]) == 0 {
+			w.setFanState(true)
+			continue
+		}
+
+		tempAvg := avg(w.data["temp-m"][max(0, len(w.data["temp-m"])-depth) : len(w.data["temp-m"])-1])
+		log.Printf("[DEBUG] temp avg: %d", tempAvg)
+
+		// something's wrong with data - keeping things safe and fan ON
+		if tempAvg == 0 {
+			w.setFanState(true)
+			continue
+		}
+
+		// turning fan ON - check every minute. Or when there's no temp data
+		if last(w.data["temp-m"]) > tempHigh {
+			w.setFanState(true)
+			continue
+		}
+
+		// turning fan OFF lags 3 minutes behind
+		if tempAvg < tempLow {
+			w.setFanState(false)
+		}
+	}
+
+	// Setting fan High if somehow we got out of the loop ))
 	if err := w.fanControl.Out(gpio.High); err != nil {
 		log.Printf("[ERROR] turning fan ON: %e", err)
 	}
@@ -181,7 +229,6 @@ func (w *Worker) startTach() {
 	if err := w.tach.In(gpio.PullUp, gpio.RisingEdge); err != nil {
 		log.Fatal(err)
 	}
-
 	log.Printf("[DEBUG] tach %s: %s\n", w.tach, w.tach.Function())
 
 	for {
@@ -304,8 +351,10 @@ func avg(slice []int) int {
 
 type Options struct {
 	Log           string `short:"l" long:"log" env:"LOG" default:"/var/log/rpid.log" description:"log file path"`
-	FanTachPin    string `short:"t" long:"tach" env:"TACH" default:"GPIO15" description:"GPIO with fan tachymeter connected"`
-	FanControlPin string `short:"c" long:"control" env:"CONTROL" default:"GPIO18" description:"GPIO with fan control connected - base of the key transistor"`
+	FanTachPin    string `long:"tach-pin" env:"TACH" default:"GPIO15" description:"GPIO with fan tachymeter connected"`
+	FanControlPin string `long:"control-pin" env:"CONTROL" default:"GPIO18" description:"GPIO with fan control connected - base of the key transistor"`
+	TempHigh      int    `long:"temp-high" env:"TEMPHIGH" default:"45" description:"Fan activation temperature"`
+	TempLow       int    `long:"temp-low" env:"TEMPLOW" default:"40" description:"Fan deactivation temperature"`
 	I2C           string `long:"i2cbus" env:"I2C" default:"4" description:"I2C bus number"`
 	Dbg           bool   `long:"dbg" env:"DEBUG" description:"show debug info"`
 }
