@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
@@ -10,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/go-pkgz/lgr"
 	"github.com/parMaster/htu21"
 	flags "github.com/umputun/go-flags"
@@ -67,10 +70,12 @@ type Worker struct {
 	// map of historical data
 	data historical
 
+	listen string
+
 	mx sync.Mutex
 }
 
-func StartNewWorker(cfg Options) *Worker {
+func StartNewWorker(cfg Options, ctx context.Context) {
 
 	data := historical{
 		// Fan tachymeters
@@ -102,6 +107,7 @@ func StartNewWorker(cfg Options) *Worker {
 		fanControlPin:       cfg.FanControlPin,
 		tempHigh:            cfg.TempHigh,
 		tempLow:             cfg.TempLow,
+		listen:              cfg.Listen,
 		temperatureFileName: "/sys/class/thermal/thermal_zone0/temp",
 		i2cBusNumber:        cfg.I2C,
 		bmp280Addr:          0x76,
@@ -114,13 +120,6 @@ func StartNewWorker(cfg Options) *Worker {
 	if _, err := host.Init(); err != nil {
 		log.Fatal(err)
 	}
-
-	go w.controlFan()
-	go w.startTach()
-
-	go w.logEverySecond()
-	go w.logEveryMinute()
-	go w.logEveryHour()
 
 	w.i2cBus, err = i2creg.Open(w.i2cBusNumber)
 	if err != nil {
@@ -137,29 +136,55 @@ func StartNewWorker(cfg Options) *Worker {
 		log.Fatalf("[ERROR] failed to initialize htu21: %v", err)
 	}
 
-	log.Printf("Service started. Fan tach on %s, trigger on %s", w.fanTachPin, w.fanControlPin)
+	go w.controlFan(ctx)
+	go w.startTach(ctx)
+
+	go w.logEverySecond(ctx)
+	go w.logEveryMinute(ctx)
+	go w.logEveryHour(ctx)
+	go w.startServer(ctx)
+
+	log.Printf("Service started. Fan tach on %s, trigger on %s, listening to \"%s\"", w.fanTachPin, w.fanControlPin, w.listen)
 	log.Printf("Temps cfg: low=%d˚C, high=%d˚C", w.tempLow, w.tempHigh)
 
-	return w
-}
-
-func (w *Worker) Halt() {
-
-	log.Println("[DEBUG] Halting tachymeter")
-	err := w.tach.Halt()
-	if err != nil {
-		log.Printf("[ERROR] Halting tachymeter: %e", err)
-	}
-
-	log.Println("[DEBUG] Closing I²C Bus")
-	w.i2cBus.Close()
-	if err != nil {
+	<-ctx.Done()
+	time.Sleep(2 * time.Second) // wait 2 secs till tach timeout (1 sec) hits
+	log.Println("[DEBUG] Closing I²C Bus on exit")
+	if err := w.i2cBus.Close(); err != nil {
 		log.Printf("[ERROR] Closing I²C: %e", err)
 	}
+}
 
-	log.Println("[DEBUG] Leaving the fan ON is always safer")
-	w.fanControl.Out(gpio.High)
-	w.fanControl.Halt()
+func (w *Worker) startServer(ctx context.Context) {
+	httpServer := &http.Server{
+		Addr:              w.listen,
+		Handler:           w.router(),
+		ReadHeaderTimeout: time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       time.Second,
+	}
+
+	httpServer.ListenAndServe()
+
+	// Wait for termination signal
+	<-ctx.Done()
+	log.Printf("[INFO] Terminating http server")
+
+	if err := httpServer.Close(); err != nil {
+		log.Printf("[ERROR] failed to close http server, %v", err)
+	}
+}
+
+func (w *Worker) router() http.Handler {
+	router := chi.NewRouter()
+
+	router.Get("/status", func(w http.ResponseWriter, r *http.Request) {
+
+		log.Println("[DEBUG] !!! status called")
+
+	})
+
+	return router
 }
 
 func (w *Worker) setFanState(state bool) error {
@@ -171,7 +196,7 @@ func (w *Worker) setFanState(state bool) error {
 	return nil
 }
 
-func (w *Worker) controlFan() {
+func (w *Worker) controlFan(ctx context.Context) {
 	w.fanControl = gpioreg.ByName(w.fanControlPin)
 	if w.fanControl == nil {
 		log.Printf("[ERROR] Failed to find %s", w.fanControl)
@@ -182,9 +207,17 @@ func (w *Worker) controlFan() {
 	tempLow := w.tempLow * 1000   // fan DEactivation temperature m˚C
 
 	ticker := time.NewTicker(30 * time.Second)
-	for range ticker.C {
-		w.mx.Lock()
+	for {
+		select {
+		case <-ctx.Done():
+			log.Println("[DEBUG] Leaving the fan ON is always safer")
+			w.fanControl.Out(gpio.High)
+			w.fanControl.Halt()
+			return
+		case <-ticker.C:
+		}
 
+		w.mx.Lock()
 		lastTemp := last(w.data["temp-m"])
 		tempAvg := 0
 		if len(w.data["temp-m"]) >= depth {
@@ -216,12 +249,9 @@ func (w *Worker) controlFan() {
 			w.setFanState(false)
 		}
 	}
-
-	// turning fan ON if somehow we got out of the loop ))
-	w.setFanState(true)
 }
 
-func (w *Worker) startTach() {
+func (w *Worker) startTach(ctx context.Context) {
 
 	w.tach = gpioreg.ByName(w.fanTachPin)
 	if w.tach == nil {
@@ -234,17 +264,31 @@ func (w *Worker) startTach() {
 	}
 	log.Printf("[DEBUG] tach %s: %s\n", w.tach, w.tach.Function())
 
-	// Count every rev
+	// Count every rev or exit
 	for {
-		w.tach.WaitForEdge(-1)
-		w.revs++
+		select {
+		case <-ctx.Done():
+			log.Println("[DEBUG] Halting tachymeter")
+			if err := w.tach.Halt(); err != nil {
+				log.Printf("[ERROR] Halting tachymeter: %e", err)
+			}
+			return
+		default:
+		}
+		if w.tach.WaitForEdge(time.Second) {
+			w.revs++
+		}
 	}
 }
 
-func (w *Worker) logEverySecond() {
+func (w *Worker) logEverySecond(ctx context.Context) {
 	ticker := time.NewTicker(1 * time.Second)
-	for range ticker.C {
-		log.Printf("[DEBUG] Fan RPS/RPM: %d/%d \r\n", w.revs, w.revs*60)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
 
 		sysTemp, err := os.ReadFile(w.temperatureFileName)
 		if err != nil {
@@ -257,20 +301,25 @@ func (w *Worker) logEverySecond() {
 			}
 		}
 
+		log.Printf("[DEBUG] Temp: %d m˚C | Fan RPS/RPM: %d/%d\r\n", w.temp, w.revs, w.revs*60)
+
 		w.mx.Lock()
 		w.data["revs"] = append(w.data["revs"], w.revs*60)
 		w.revs = 0
 		w.data["temp"] = append(w.data["temp"], w.temp)
 		w.mx.Unlock()
-
-		log.Printf("[DEBUG] Temperature (milli˚C): %d\r\n", w.temp)
 	}
 }
 
 // Aggregate measurements by second to data by minute
-func (w *Worker) logEveryMinute() {
+func (w *Worker) logEveryMinute(ctx context.Context) {
 	ticker := time.NewTicker(60 * time.Second)
-	for range ticker.C {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
 
 		if err := w.bmp280Device.Sense(&w.bmp280Data); err != nil {
 			log.Fatal(err)
@@ -307,9 +356,15 @@ func (w *Worker) aggregateHourly(source, dest string) {
 }
 
 // Aggregate measurements by second to data hourly
-func (w *Worker) logEveryHour() {
+func (w *Worker) logEveryHour(ctx context.Context) {
 	ticker := time.NewTicker(60 * time.Minute)
-	for range ticker.C {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+
 		w.mx.Lock()
 		w.aggregateHourly("rpm-m", "rpm-h")
 		w.aggregateHourly("temp-m", "temp-h")
@@ -353,6 +408,7 @@ func avg(slice []int) int {
 }
 
 type Options struct {
+	Listen        string `long:"listen" env:"LISTEN" default:"pi4.local:8095" description:"Port for http server to listen to"`
 	FanTachPin    string `long:"tach-pin" env:"TACH" default:"GPIO15" description:"GPIO with fan tachymeter connected"`
 	FanControlPin string `long:"control-pin" env:"CONTROL" default:"GPIO18" description:"GPIO with fan control connected - base of the key transistor"`
 	TempHigh      int    `long:"temp-high" env:"TEMPHIGH" default:"45" description:"Fan activation temperature"`
@@ -385,14 +441,21 @@ func main() {
 	}
 	lgr.SetupStdLogger(logOpts...)
 
-	// Graceful shutdown
-	termChan := make(chan os.Signal, 1)
-	signal.Notify(termChan, syscall.SIGINT, syscall.SIGTERM)
+	// Graceful termination
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		if x := recover(); x != nil {
+			log.Printf("[WARN] run time panic:\n%v", x)
+			panic(x)
+		}
 
-	w := StartNewWorker(opts)
+		// catch signal and invoke graceful termination
+		stop := make(chan os.Signal, 1)
+		signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+		<-stop
+		log.Println("Shutdown signal received\n*********************************")
+		cancel()
+	}()
 
-	<-termChan
-
-	log.Println("Shutdown signal received\n*********************************")
-	w.Halt()
+	StartNewWorker(opts, ctx)
 }
