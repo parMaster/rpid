@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -178,10 +179,23 @@ func (w *Worker) startServer(ctx context.Context) {
 func (w *Worker) router() http.Handler {
 	router := chi.NewRouter()
 
-	router.Get("/status", func(w http.ResponseWriter, r *http.Request) {
-
+	router.Get("/status", func(rw http.ResponseWriter, r *http.Request) {
 		log.Println("[DEBUG] !!! status called")
 
+		w.mx.Lock()
+
+		resp := map[string]int{
+			"temp-m":     last(w.data["temp-m"]) / 1000,
+			"amb-temp-m": last(w.data["amb-temp-m"]) / 1000,
+			"press-m":    last(w.data["press-m"]),
+			"rh-m":       last(w.data["rh-m"]),
+			"rpm-m":      last(w.data["rpm-m"]),
+		}
+
+		w.mx.Unlock()
+
+		rw.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(rw).Encode(resp)
 	})
 
 	return router
