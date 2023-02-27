@@ -199,7 +199,9 @@ func (w *Worker) router() http.Handler {
 
 		w.mx.Lock()
 		rw.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(rw).Encode(w.data)
+		resp := w.data
+		resp["revs"] = []int{}
+		json.NewEncoder(rw).Encode(resp)
 		w.mx.Unlock()
 
 	})
@@ -221,12 +223,11 @@ func (w *Worker) controlFan(ctx context.Context) {
 	if w.fanControl == nil {
 		log.Printf("[ERROR] Failed to find %s", w.fanControl)
 	}
+	time.Sleep(1 * time.Second)
 
-	depth := 3                    // minutes moving average
 	tempHigh := w.tempHigh * 1000 // fan   activation temperature m˚C
 	tempLow := w.tempLow * 1000   // fan DEactivation temperature m˚C
-
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(10 * time.Second)
 	for {
 		select {
 		case <-ctx.Done():
@@ -238,34 +239,37 @@ func (w *Worker) controlFan(ctx context.Context) {
 		}
 
 		w.mx.Lock()
-		lastTemp := last(w.data["temp-m"])
-		tempAvg := 0
-		if len(w.data["temp-m"]) >= depth {
-			tempAvg = avg(w.data["temp-m"][max(0, len(w.data["temp-m"])-depth) : len(w.data["temp-m"])-1])
+		ma10sec, ma30sec, ma1min, ma3min := 0, 0, last(w.data["temp-m"]), 0
+		if len(w.data["temp"]) >= 10 {
+			ma10sec = avg(w.data["temp"][max(0, len(w.data["temp"])-9) : len(w.data["temp"])-1])
 		}
-		log.Printf("[DEBUG] temp avg: %d", tempAvg)
+		log.Printf("[DEBUG] 10 seconds moving average: %d", ma10sec)
+
+		if len(w.data["temp"]) >= 30 {
+			ma30sec = avg(w.data["temp"][max(0, len(w.data["temp"])-29) : len(w.data["temp"])-1])
+		}
+		log.Printf("[DEBUG] 30 seconds moving average: %d", ma30sec)
+
+		log.Printf("[DEBUG] 1 minute moving average: %d", ma1min)
+
+		if len(w.data["temp-m"]) >= 3 {
+			ma3min = avg(w.data["temp-m"][max(0, len(w.data["temp-m"])-2) : len(w.data["temp-m"])-1])
+		}
+		log.Printf("[DEBUG] 3 minutes moving average: %d", ma3min)
 		w.mx.Unlock()
 
-		// no data - keeping things safe and fan ON
-		if lastTemp == 0 {
-			w.setFanState(true)
-			continue
-		}
-
-		// something's wrong with data - keeping things safe and fan ON
-		if tempAvg == 0 {
-			w.setFanState(true)
-			continue
-		}
-
 		// turning fan ON - check every minute. Or when there's no temp data
-		if lastTemp > tempHigh {
+		if ma10sec > tempHigh+10000 ||
+			ma30sec > tempHigh+5000 ||
+			ma1min > tempHigh ||
+			ma1min == 0 ||
+			ma3min == 0 {
 			w.setFanState(true)
 			continue
 		}
 
 		// turning fan OFF lags 3 minutes behind
-		if tempAvg < tempLow {
+		if ma3min < tempLow {
 			w.setFanState(false)
 		}
 	}
@@ -356,8 +360,12 @@ func (w *Worker) logEveryMinute(ctx context.Context) {
 		w.data["rpm-m"] = append(w.data["rpm-m"], avg(w.data["revs"]))
 		w.data["revs"] = []int{}
 
-		w.data["temp-m"] = append(w.data["temp-m"], avg(w.data["temp"]))
-		w.data["temp"] = []int{}
+		w.aggregateLast60("temp", "temp-m")
+
+		// "scrolling" temperature history, leave only last 60 seconds
+		if len(w.data["temp"]) > 100 {
+			w.data["temp"] = w.data["temp"][len(w.data["temp"])-60 : len(w.data["temp"])-1]
+		}
 
 		w.data["amb-temp-m"] = append(w.data["amb-temp-m"], int(tempMilliC))
 		w.data["press-m"] = append(w.data["press-m"], int(pressureHPa))
@@ -371,7 +379,7 @@ func (w *Worker) logEveryMinute(ctx context.Context) {
 	}
 }
 
-func (w *Worker) aggregateHourly(source, dest string) {
+func (w *Worker) aggregateLast60(source, dest string) {
 	w.data[dest] = append(w.data[dest], avg(w.data[source][max(0, len(w.data[source])-60):len(w.data[source])-1]))
 }
 
@@ -386,11 +394,11 @@ func (w *Worker) logEveryHour(ctx context.Context) {
 		}
 
 		w.mx.Lock()
-		w.aggregateHourly("rpm-m", "rpm-h")
-		w.aggregateHourly("temp-m", "temp-h")
-		w.aggregateHourly("amb-temp-m", "amb-temp-h")
-		w.aggregateHourly("press-m", "press-h")
-		w.aggregateHourly("rh-m", "rh-h")
+		w.aggregateLast60("rpm-m", "rpm-h")
+		w.aggregateLast60("temp-m", "temp-h")
+		w.aggregateLast60("amb-temp-m", "amb-temp-h")
+		w.aggregateLast60("press-m", "press-h")
+		w.aggregateLast60("rh-m", "rh-h")
 
 		log.Print("*** Hourly \r\n")
 		log.Printf("CPU: %d m˚C\r\n", last(w.data["temp-h"]))
