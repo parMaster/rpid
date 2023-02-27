@@ -180,10 +180,8 @@ func (w *Worker) router() http.Handler {
 	router := chi.NewRouter()
 
 	router.Get("/status", func(rw http.ResponseWriter, r *http.Request) {
-		log.Println("[DEBUG] !!! status called")
 
 		w.mx.Lock()
-
 		resp := map[string]int{
 			"temp-m":     last(w.data["temp-m"]) / 1000,
 			"amb-temp-m": last(w.data["amb-temp-m"]) / 1000,
@@ -191,11 +189,19 @@ func (w *Worker) router() http.Handler {
 			"rh-m":       last(w.data["rh-m"]),
 			"rpm-m":      last(w.data["rpm-m"]),
 		}
-
 		w.mx.Unlock()
 
 		rw.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(rw).Encode(resp)
+	})
+
+	router.Get("/fullData", func(rw http.ResponseWriter, r *http.Request) {
+
+		w.mx.Lock()
+		rw.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(rw).Encode(w.data)
+		w.mx.Unlock()
+
 	})
 
 	return router
@@ -339,7 +345,7 @@ func (w *Worker) logEveryMinute(ctx context.Context) {
 			log.Fatal(err)
 		}
 		pressureHPa := w.bmp280Data.Pressure / HectoPascal
-		tempMilliC := w.bmp280Data.Temperature / 10000000
+		tempMilliC := int64(w.bmp280Data.Temperature-physic.ZeroCelsius) / 10000000
 
 		if err := w.htu21Device.Sense(&w.htu21Data); err != nil {
 			log.Fatal(err)
