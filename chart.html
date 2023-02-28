@@ -32,7 +32,8 @@ async function loadChart() {
 	var rpm = {
 		y: data["rpm-m"],
 		type: 'scatter',
-		name: 'RPM'
+		name: 'RPM',
+		yaxis: 'y2',
 	};
 	var amb_temp = {
 		y: data["amb-temp-m"],
@@ -51,8 +52,8 @@ async function loadChart() {
 		name: 'Atmospheric pressure, mPa'
 	};
 
-	Plotly.newPlot('temp_rpm_chart', [temp, rpm]);
-	Plotly.newPlot('amb_temp_chart', [amb_temp, rh_m], {yaxis: {title: 'Ambient temp, m˚C'},  yaxis2: {title: 'Relative Humidity, mRh', overlaying: 'y',  side: 'right'}});
+	Plotly.newPlot('temp_rpm_chart', [temp, rpm], {yaxis: {title: 'CPU, m˚C'},  yaxis2: {title: 'RPM', overlaying: 'y',  side: 'right', gridcolor: 'rgb(255, 255, 255)'}});
+	Plotly.newPlot('amb_temp_chart', [amb_temp, rh_m], {yaxis: {title: 'Ambient temp, m˚C', gridcolor: 'rgba(31, 119, 180, 0.3)'},  yaxis2: {title: 'Relative Humidity, mRh', overlaying: 'y',  side: 'right', gridcolor: 'rgba(255, 127, 14, 0.3)'}});
 	Plotly.newPlot('press_chart', [press], {title: "Atmospheric pressure, mPa"});
 }
 loadChart();
