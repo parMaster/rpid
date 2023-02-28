@@ -33,6 +33,7 @@ const (
 )
 
 type Worker struct {
+	dbg bool
 	// persistent revs counter
 	revs int
 
@@ -104,6 +105,7 @@ func StartNewWorker(cfg Options, ctx context.Context) {
 
 	w := &Worker{
 		data:                data,
+		dbg:                 cfg.Dbg,
 		fanTachPin:          cfg.FanTachPin,
 		fanControlPin:       cfg.FanControlPin,
 		tempHigh:            cfg.TempHigh,
@@ -196,14 +198,23 @@ func (w *Worker) router() http.Handler {
 	})
 
 	router.Get("/fullData", func(rw http.ResponseWriter, r *http.Request) {
-
 		w.mx.Lock()
 		rw.Header().Set("Content-Type", "application/json")
+		rw.Header().Set("Access-Control-Allow-Origin", "*")
 		resp := w.data
 		resp["revs"] = []int{}
 		json.NewEncoder(rw).Encode(resp)
 		w.mx.Unlock()
+	})
 
+	router.Get("/charts", func(rw http.ResponseWriter, r *http.Request) {
+		if w.dbg {
+			if b, err := os.ReadFile("chart.html"); err == nil {
+				rw.Write([]byte(b))
+			}
+		} else {
+			rw.Write([]byte(chart_html))
+		}
 	})
 
 	return router
@@ -286,7 +297,6 @@ func (w *Worker) startTach(ctx context.Context) {
 	if err := w.tach.In(gpio.PullUp, gpio.RisingEdge); err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("[DEBUG] tach %s: %s\n", w.tach, w.tach.Function())
 
 	// Count every rev or exit
 	for {
