@@ -186,7 +186,7 @@ func (w *Worker) router() http.Handler {
 		w.mx.Lock()
 		resp := map[string]int{
 			"temp-m":     last(w.data["temp-m"]) / 1000,
-			"amb-temp-m": last(w.data["amb-temp-m"]) / 1000,
+			"amb-temp-m": last(w.data["amb-temp-m"]) / 100,
 			"press-m":    last(w.data["press-m"]),
 			"rh-m":       last(w.data["rh-m"]),
 			"rpm-m":      last(w.data["rpm-m"]),
@@ -201,9 +201,20 @@ func (w *Worker) router() http.Handler {
 		w.mx.Lock()
 		rw.Header().Set("Content-Type", "application/json")
 		rw.Header().Set("Access-Control-Allow-Origin", "*")
-		resp := w.data
-		resp["revs"] = []int{}
-		json.NewEncoder(rw).Encode(resp)
+
+		var out struct {
+			Data  historical
+			Dates []string
+		}
+
+		out.Data = w.data
+		out.Data["revs"] = []int{}
+		out.Dates = []string{}
+		now := time.Now()
+		for i := len(out.Data["temp-m"]); i > 0; i-- {
+			out.Dates = append(out.Dates, now.Add(-1*time.Minute*time.Duration(i)).Format("2006-01-02 15:04"))
+		}
+		json.NewEncoder(rw).Encode(out)
 		w.mx.Unlock()
 	})
 

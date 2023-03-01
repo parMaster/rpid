@@ -25,29 +25,34 @@ async function loadChart() {
     let data = await getData();
 
 	var temp = {
-		y: data["temp-m"],
+		x: data["Dates"],
+		y: data["Data"]["temp-m"],
 		type: 'scatter',
 		name: 'CPU, m˚C'
 	};
 	var rpm = {
-		y: data["rpm-m"],
+		x: data["Dates"],
+		y: data["Data"]["rpm-m"],
 		type: 'scatter',
 		name: 'RPM',
 		yaxis: 'y2',
 	};
 	var amb_temp = {
-		y: data["amb-temp-m"],
+		x: data["Dates"],
+		y: data["Data"]["amb-temp-m"],
 		type: 'scatter',
 		name: 'Ambient temp, m˚C'
 	};
 	var rh_m = {
-		y: data["rh-m"],
+		x: data["Dates"],
+		y: data["Data"]["rh-m"],
 		type: 'scatter',
 		name: 'Relative Humidity, mRh',
 		yaxis: 'y2',
 	};
 	var press = {
-		y: data["press-m"],
+		x: data["Dates"],
+		y: data["Data"]["press-m"],
 		type: 'scatter',
 		name: 'Atmospheric pressure, mPa'
 	};
