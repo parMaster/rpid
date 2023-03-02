@@ -897,7 +897,7 @@ async function loadChart() {
 	Plotly.newPlot('press_chart', [press], {title: "Atmospheric pressure, mPa", template: template});
 }
 
-var interval = setInterval(loadChart, 1000);
+var interval = setInterval(loadChart, 60000);
 
 loadChart();
 
