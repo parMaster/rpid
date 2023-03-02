@@ -1,3 +1,4 @@
+<title>RPId Charts</title>
 <head>
 	<!-- Doc: https://plotly.com/javascript/line-charts/pi -->
 	<!-- Dark theme derived from: https://jsfiddle.net/3hfq7ast/ -->
@@ -27,9 +28,7 @@ async function getData() {
     }
 }
 
-async function loadChart() {
-
-	const template = {
+const template = {
 		"data": {
 			"barpolar": [
 				{
@@ -855,6 +854,7 @@ async function loadChart() {
 		}
 }
 
+async function loadChart() {
 	let data = await getData();
 
 	var temp = {
@@ -895,6 +895,9 @@ async function loadChart() {
 	Plotly.newPlot('amb_temp_chart', [amb_temp, rh_m], {yaxis: {title: 'Ambient temp, m˚C', gridcolor: 'rgba(99, 110, 250, 0.2)'},  yaxis2: {title: 'Relative Humidity, mRh', overlaying: 'y',  side: 'right', gridcolor: 'rgba(239, 85, 59, 0.2)'}, template: template});
 	Plotly.newPlot('press_chart', [press], {title: "Atmospheric pressure, mPa", template: template});
 }
+
+var interval = setInterval(loadChart, 1000);
+
 loadChart();
 
 </script>
