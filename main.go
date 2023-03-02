@@ -285,15 +285,19 @@ func (w *Worker) controlFan(ctx context.Context) {
 			ma30sec > tempHigh+5000 || // Fast rise
 			ma1min > tempHigh || // High temperature
 			ma1min == 0 || // No data
-			ma3min == 0 || // No data
-			ma3min > tempLow { // Avoid frequent state change
+			ma3min == 0 { //  No data
 
 			w.setFanState(true)
 			continue
 		}
 
 		// Deactivate otherwise
-		w.setFanState(false)
+		if ma3min < tempLow || // Lower than low for 3 minutes
+			ma1min < tempLow-1000 || // Low enough
+			ma30sec < tempLow-2000 || // Fast decline
+			ma10sec < tempLow-4000 { // Sudden drop
+			w.setFanState(false)
+		}
 	}
 }
 
