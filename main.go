@@ -280,20 +280,20 @@ func (w *Worker) controlFan(ctx context.Context) {
 		log.Printf("[DEBUG] 3 minutes moving average: %d", ma3min)
 		w.mx.Unlock()
 
-		// turning fan ON - check every minute. Or when there's no temp data
-		if ma10sec > tempHigh+10000 ||
-			ma30sec > tempHigh+5000 ||
-			ma1min > tempHigh ||
-			ma1min == 0 ||
-			ma3min == 0 {
+		// Fan activation conditions
+		if ma10sec > tempHigh+10000 || // Sudden spike
+			ma30sec > tempHigh+5000 || // Fast rise
+			ma1min > tempHigh || // High temperature
+			ma1min == 0 || // No data
+			ma3min == 0 || // No data
+			ma3min > tempLow { // Avoid frequent state change
+
 			w.setFanState(true)
 			continue
 		}
 
-		// turning fan OFF lags 3 minutes behind
-		if ma3min < tempLow {
-			w.setFanState(false)
-		}
+		// Deactivate otherwise
+		w.setFanState(false)
 	}
 }
 
@@ -370,7 +370,7 @@ func (w *Worker) logEveryMinute(ctx context.Context) {
 			log.Fatal(err)
 		}
 		pressureHPa := w.bmp280Data.Pressure / HectoPascal
-		tempMilliC := int64(w.bmp280Data.Temperature-physic.ZeroCelsius) / 10000000
+		tempMilliC := int64(w.bmp280Data.Temperature-physic.ZeroCelsius) / 1000000
 
 		if err := w.htu21Device.Sense(&w.htu21Data); err != nil {
 			log.Fatal(err)

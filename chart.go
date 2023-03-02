@@ -14,7 +14,6 @@ const chart_html = `<title>RPId Charts</title>
 </head>
 
 <body>
-	This is chart.html, remove this label from chart.go
 	<div id='temp_rpm_chart'><!-- Plotly chart will be drawn inside this DIV --></div>
 	<div id='amb_temp_chart'><!-- Plotly chart will be drawn inside this DIV --></div>
 	<div id='press_chart'><!-- Plotly chart will be drawn inside this DIV --></div>
