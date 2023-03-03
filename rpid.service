@@ -14,7 +14,7 @@ Type=simple
 Restart=always
 RestartSec=1
 User=pi
-ExecStart=/usr/bin/rpid
+ExecStart=/usr/bin/rpid --listen=:8095
 StandardOutput=append:/var/log/rpid.log
 StandardError=append:/var/log/rpid.err
 
