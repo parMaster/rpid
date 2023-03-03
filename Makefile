@@ -15,8 +15,8 @@ service-deploy:
 	sudo cp rpid /usr/bin/
 	sudo cp rpid.service /etc/systemd/system/
 	sudo systemctl daemon-reload
-	sudo systemctl start rpid.service
 	sudo systemctl enable rpid.service
+	sudo systemctl start rpid.service
 
 service-status:
 	sudo systemctl status rpid.service
