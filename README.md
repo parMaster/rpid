@@ -2,6 +2,9 @@
 Log CPU temperature, fan RPM, environmental data (Ambient temperature, Relative humidity, Atmospheric pressure) from external sensors connected to Raspberry Pi GPIO. Control fan state without a built-in gpio-fan overlay 
 
 # ToDo's
+
+- extract env sensors polls to external plugins. I'll need some kind of main service with plugins structure
+
 - throttling detection :
     - https://chewett.co.uk/blog/258/vchi-initialization-failed-raspberry-pi-fixed/
     - https://jamesachambers.com/measure-raspberry-pi-undervoltage-true-clock-speeds/
