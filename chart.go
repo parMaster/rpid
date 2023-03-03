@@ -20,7 +20,7 @@ const chart_html = `<title>RPId Charts</title>
 
 <script>
 async function getData() {
-    let url = 'http://pi4.local:8095/fullData';
+    let url = '/fullData';
     try {
         let resp = await fetch(url);
         return await resp.json();
