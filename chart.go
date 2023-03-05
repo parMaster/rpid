@@ -15,6 +15,7 @@ const chart_html = `<title>RPId Charts</title>
 
 <body>
 	<div id='temp_rpm_chart'><!-- Plotly chart will be drawn inside this DIV --></div>
+	<div id='TimeInState'><!-- Plotly chart will be drawn inside this DIV --></div>
 	<div id='amb_temp_chart'><!-- Plotly chart will be drawn inside this DIV --></div>
 	<div id='press_chart'><!-- Plotly chart will be drawn inside this DIV --></div>
 
@@ -891,10 +892,28 @@ async function loadChart() {
 		name: 'Atmospheric pressure, mPa'
 	};
 
+	var TimeInState = {
+		type:"pie",
+		values: Object.values(data["TimeInState"]),
+		labels: Object.keys(data["TimeInState"]),
+		textinfo: "label",
+		insidetextorientation: "radial",
+		automargin: true
+	}
+	var TISlayout = {
+		title: 'CPU Time in Frequency, seconds in MHz',
+		height: 500,
+		width: 500,
+		margin: {"t": 32, "b": 0, "l": 0, "r": 0},
+		showlegend: true,
+		template: template
+	}
+
 	Plotly.template = "plotly_dark"
 	Plotly.newPlot('temp_rpm_chart', [temp, rpm], {yaxis: {title: 'CPU, m˚C', gridcolor: 'rgba(99, 110, 250, 0.2)'},  yaxis2: {title: 'Fan RPM', overlaying: 'y',  side: 'right', gridcolor: 'rgba(239, 85, 59, 0.2)', showgrid: false}, template: template});
 	Plotly.newPlot('amb_temp_chart', [amb_temp, rh_m], {yaxis: {title: 'Ambient temp, m˚C', gridcolor: 'rgba(99, 110, 250, 0.2)'},  yaxis2: {title: 'Relative Humidity, mRh', overlaying: 'y',  side: 'right', gridcolor: 'rgba(239, 85, 59, 0.2)'}, template: template});
 	Plotly.newPlot('press_chart', [press], {title: "Atmospheric pressure, mPa", template: template});
+	Plotly.newPlot('TimeInState', [TimeInState], TISlayout);
 }
 
 var interval = setInterval(loadChart, 60000);

@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -203,9 +204,11 @@ func (w *Worker) router() http.Handler {
 		rw.Header().Set("Access-Control-Allow-Origin", "*")
 
 		var out struct {
-			Data  historical
-			Dates []string
+			Data        historical
+			Dates       []string
+			TimeInState map[string]int
 		}
+		var err error
 
 		out.Data = w.data
 		out.Data["revs"] = []int{}
@@ -214,6 +217,12 @@ func (w *Worker) router() http.Handler {
 		for i := len(out.Data["temp-m"]); i > 0; i-- {
 			out.Dates = append(out.Dates, now.Add(-1*time.Minute*time.Duration(i)).Format("2006-01-02 15:04"))
 		}
+
+		out.TimeInState, err = w.getCPUTimeInState()
+		if err != nil {
+			log.Printf("[ERROR] failed to get cpu time in state: %v", err)
+		}
+
 		json.NewEncoder(rw).Encode(out)
 		w.mx.Unlock()
 	})
@@ -229,6 +238,38 @@ func (w *Worker) router() http.Handler {
 	})
 
 	return router
+}
+
+func (w *Worker) getCPUTimeInState() (map[string]int, error) {
+	var (
+		out  = map[string]int{}
+		data []byte
+		err  error
+	)
+
+	if w.dbg {
+		data, err = os.ReadFile("cpu_time_in_state.txt")
+	} else {
+		data, err = os.ReadFile("/sys/devices/system/cpu/cpu0/cpufreq/stats/time_in_state")
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	for _, line := range strings.Split(string(data), "\n") {
+		if line == "" {
+			continue
+		}
+		parts := strings.Split(line, " ")
+		if len(parts) != 2 {
+			continue
+		}
+		parts[0] = parts[0][0 : len(parts[0])-3]
+		out[parts[0]], _ = strconv.Atoi(parts[1])
+		out[parts[0]] /= 100 // milliseconds to seconds
+	}
+	return out, nil
 }
 
 func (w *Worker) setFanState(state bool) error {
