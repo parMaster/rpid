@@ -871,6 +871,24 @@ async function loadChart() {
 		name: 'Fan RPM',
 		yaxis: 'y2',
 	};
+
+	var TempRPMLayout = {
+		yaxis: {
+			title: 'CPU, m˚C', 
+			gridcolor: 'rgba(99, 110, 250, 0.2)'
+		},
+		yaxis2: {
+			title: 'Fan RPM',
+			overlaying: 'y',
+			side: 'right',
+			gridcolor: 'rgba(239, 85, 59, 0.2)',
+			showgrid: false,
+		},
+		margin: {"t": 32, "b": 0, "l": 0, "r": 0},
+		height: 400,
+		template: template
+	}
+
 	var amb_temp = {
 		x: data["Dates"],
 		y: data["Data"]["amb-temp-m"],
@@ -884,11 +902,31 @@ async function loadChart() {
 		name: 'Relative Humidity, mRh',
 		yaxis: 'y2',
 	};
+
+	var AmbRHLayout = {
+		yaxis: {
+			title: 'Ambient temp, m˚C',
+			gridcolor: 'rgba(99, 110, 250, 0.2)'
+		},
+		yaxis2: {
+			title: 'Relative Humidity, mRh',
+			overlaying: 'y',
+			side: 'right',
+			gridcolor: 'rgba(239, 85, 59, 0.2)'
+		},
+		margin: {"t": 32, "b": 0, "l": 0, "r": 0},
+		template: template
+	}
+
 	var press = {
 		x: data["Dates"],
 		y: data["Data"]["press-m"],
 		type: 'scatter',
 		name: 'Atmospheric pressure, mPa'
+	};
+	var PressLayout = {
+		title: "Atmospheric pressure, mPa", 
+		template: template
 	};
 
 	var TimeInState = {
@@ -901,18 +939,20 @@ async function loadChart() {
 	}
 	var TISlayout = {
 		title: 'CPU Time in Frequency, seconds in MHz',
-		height: 500,
-		width: 500,
+		height: 400,
+		width: 400,
 		margin: {"t": 32, "b": 0, "l": 0, "r": 0},
 		showlegend: true,
+		margin: {"t": 32, "b": 0, "l": 0, "r": 0},
 		template: template
 	}
 
-	Plotly.template = "plotly_dark"
-	Plotly.newPlot('temp_rpm_chart', [temp, rpm], {yaxis: {title: 'CPU, m˚C', gridcolor: 'rgba(99, 110, 250, 0.2)'},  yaxis2: {title: 'Fan RPM', overlaying: 'y',  side: 'right', gridcolor: 'rgba(239, 85, 59, 0.2)', showgrid: false}, template: template});
-	Plotly.newPlot('amb_temp_chart', [amb_temp, rh_m], {yaxis: {title: 'Ambient temp, m˚C', gridcolor: 'rgba(99, 110, 250, 0.2)'},  yaxis2: {title: 'Relative Humidity, mRh', overlaying: 'y',  side: 'right', gridcolor: 'rgba(239, 85, 59, 0.2)'}, template: template});
-	Plotly.newPlot('press_chart', [press], {title: "Atmospheric pressure, mPa", template: template});
+	Plotly.newPlot('temp_rpm_chart', [temp, rpm], TempRPMLayout);
 	Plotly.newPlot('TimeInState', [TimeInState], TISlayout);
+
+	Plotly.newPlot('amb_temp_chart', [amb_temp, rh_m], AmbRHLayout);
+
+	Plotly.newPlot('press_chart', [press], PressLayout);
 }
 
 var interval = setInterval(loadChart, 60000);
