@@ -145,7 +145,6 @@ func StartNewWorker(cfg Options, ctx context.Context) {
 
 	go w.logEverySecond(ctx)
 	go w.logEveryMinute(ctx)
-	go w.logEveryHour(ctx)
 	go w.startServer(ctx)
 
 	log.Printf("Service started. Fan tach on %s, trigger on %s, listening to \"%s\"", w.fanTachPin, w.fanControlPin, w.listen)
@@ -157,87 +156,6 @@ func StartNewWorker(cfg Options, ctx context.Context) {
 	if err := w.i2cBus.Close(); err != nil {
 		log.Printf("[ERROR] Closing I²C: %e", err)
 	}
-}
-
-func (w *Worker) startServer(ctx context.Context) {
-	httpServer := &http.Server{
-		Addr:              w.listen,
-		Handler:           w.router(),
-		ReadHeaderTimeout: time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       time.Second,
-	}
-
-	httpServer.ListenAndServe()
-
-	// Wait for termination signal
-	<-ctx.Done()
-	log.Printf("[INFO] Terminating http server")
-
-	if err := httpServer.Close(); err != nil {
-		log.Printf("[ERROR] failed to close http server, %v", err)
-	}
-}
-
-func (w *Worker) router() http.Handler {
-	router := chi.NewRouter()
-
-	router.Get("/status", func(rw http.ResponseWriter, r *http.Request) {
-
-		w.mx.Lock()
-		resp := map[string]int{
-			"temp-m":     last(w.data["temp-m"]) / 1000,
-			"amb-temp-m": last(w.data["amb-temp-m"]) / 100,
-			"press-m":    last(w.data["press-m"]),
-			"rh-m":       last(w.data["rh-m"]),
-			"rpm-m":      last(w.data["rpm-m"]),
-		}
-		w.mx.Unlock()
-
-		rw.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(rw).Encode(resp)
-	})
-
-	router.Get("/fullData", func(rw http.ResponseWriter, r *http.Request) {
-		w.mx.Lock()
-		rw.Header().Set("Content-Type", "application/json")
-		rw.Header().Set("Access-Control-Allow-Origin", "*")
-
-		var out struct {
-			Data        historical
-			Dates       []string
-			TimeInState map[string]int
-		}
-		var err error
-
-		out.Data = w.data
-		out.Data["revs"] = []int{}
-		out.Dates = []string{}
-		now := time.Now()
-		for i := len(out.Data["temp-m"]); i > 0; i-- {
-			out.Dates = append(out.Dates, now.Add(-1*time.Minute*time.Duration(i)).Format("2006-01-02 15:04"))
-		}
-
-		out.TimeInState, err = w.getCPUTimeInState()
-		if err != nil {
-			log.Printf("[ERROR] failed to get cpu time in state: %v", err)
-		}
-
-		json.NewEncoder(rw).Encode(out)
-		w.mx.Unlock()
-	})
-
-	router.Get("/charts", func(rw http.ResponseWriter, r *http.Request) {
-		if w.dbg {
-			if b, err := os.ReadFile("chart.html"); err == nil {
-				rw.Write([]byte(b))
-			}
-		} else {
-			rw.Write([]byte(chart_html))
-		}
-	})
-
-	return router
 }
 
 func (w *Worker) getCPUTimeInState() (map[string]int, error) {
@@ -371,6 +289,87 @@ func (w *Worker) startTach(ctx context.Context) {
 	}
 }
 
+func (w *Worker) startServer(ctx context.Context) {
+	httpServer := &http.Server{
+		Addr:              w.listen,
+		Handler:           w.router(),
+		ReadHeaderTimeout: time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       time.Second,
+	}
+
+	httpServer.ListenAndServe()
+
+	// Wait for termination signal
+	<-ctx.Done()
+	log.Printf("[INFO] Terminating http server")
+
+	if err := httpServer.Close(); err != nil {
+		log.Printf("[ERROR] failed to close http server, %v", err)
+	}
+}
+
+func (w *Worker) router() http.Handler {
+	router := chi.NewRouter()
+
+	router.Get("/status", func(rw http.ResponseWriter, r *http.Request) {
+
+		w.mx.Lock()
+		resp := map[string]int{
+			"temp-m":     last(w.data["temp-m"]) / 1000,
+			"amb-temp-m": last(w.data["amb-temp-m"]) / 100,
+			"press-m":    last(w.data["press-m"]),
+			"rh-m":       last(w.data["rh-m"]),
+			"rpm-m":      last(w.data["rpm-m"]),
+		}
+		w.mx.Unlock()
+
+		rw.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(rw).Encode(resp)
+	})
+
+	router.Get("/fullData", func(rw http.ResponseWriter, r *http.Request) {
+		w.mx.Lock()
+		rw.Header().Set("Content-Type", "application/json")
+		rw.Header().Set("Access-Control-Allow-Origin", "*")
+
+		var out struct {
+			Data        historical
+			Dates       []string
+			TimeInState map[string]int
+		}
+		var err error
+
+		out.Data = w.data
+		out.Data["revs"] = []int{}
+		out.Dates = []string{}
+		now := time.Now()
+		for i := len(out.Data["temp-m"]); i > 0; i-- {
+			out.Dates = append(out.Dates, now.Add(-1*time.Minute*time.Duration(i)).Format("2006-01-02 15:04"))
+		}
+
+		out.TimeInState, err = w.getCPUTimeInState()
+		if err != nil {
+			log.Printf("[ERROR] failed to get cpu time in state: %v", err)
+		}
+
+		json.NewEncoder(rw).Encode(out)
+		w.mx.Unlock()
+	})
+
+	router.Get("/charts", func(rw http.ResponseWriter, r *http.Request) {
+		if w.dbg {
+			if b, err := os.ReadFile("chart.html"); err == nil {
+				rw.Write([]byte(b))
+			}
+		} else {
+			rw.Write([]byte(chart_html))
+		}
+	})
+
+	return router
+}
+
 func (w *Worker) logEverySecond(ctx context.Context) {
 	ticker := time.NewTicker(1 * time.Second)
 	for {
@@ -426,7 +425,7 @@ func (w *Worker) logEveryMinute(ctx context.Context) {
 		w.data["rpm-m"] = append(w.data["rpm-m"], avg(w.data["revs"]))
 		w.data["revs"] = []int{}
 
-		w.aggregateLast60("temp", "temp-m")
+		w.data["temp-m"] = append(w.data["temp-m"], avg(w.data["temp"][max(0, len(w.data["temp"])-60):len(w.data["temp"])-1]))
 
 		// "scrolling" temperature history, leave only last 60 seconds
 		if len(w.data["temp"]) > 100 {
@@ -441,37 +440,6 @@ func (w *Worker) logEveryMinute(ctx context.Context) {
 		log.Printf("Fan: %d rpm\r\n", last(w.data["rpm-m"]))
 		log.Printf("BMP280: %8s | %d hPa \n", w.bmp280Data.Temperature, pressureHPa)
 		log.Printf("HTU21: %8s | %s (%d mRh) \n", w.htu21Data.Temperature, w.htu21Data.Humidity, humidMilliRH)
-		w.mx.Unlock()
-	}
-}
-
-func (w *Worker) aggregateLast60(source, dest string) {
-	w.data[dest] = append(w.data[dest], avg(w.data[source][max(0, len(w.data[source])-60):len(w.data[source])-1]))
-}
-
-// Aggregate measurements by second to data hourly
-func (w *Worker) logEveryHour(ctx context.Context) {
-	ticker := time.NewTicker(60 * time.Minute)
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-		}
-
-		w.mx.Lock()
-		w.aggregateLast60("rpm-m", "rpm-h")
-		w.aggregateLast60("temp-m", "temp-h")
-		w.aggregateLast60("amb-temp-m", "amb-temp-h")
-		w.aggregateLast60("press-m", "press-h")
-		w.aggregateLast60("rh-m", "rh-h")
-
-		log.Print("*** Hourly \r\n")
-		log.Printf("CPU: %d m˚C\r\n", last(w.data["temp-h"]))
-		log.Printf("Fan: %d rpm\r\n", last(w.data["rpm-h"]))
-		log.Printf("Ambient Temp: %d m˚C\r\n", last(w.data["amb-temp-h"]))
-		log.Printf("Atmospheric pressure: %d hPa\r\n", last(w.data["press-h"]))
-		log.Printf("Relative Humidity: %d mRh\r\n", last(w.data["rh-h"]))
 		w.mx.Unlock()
 	}
 }
