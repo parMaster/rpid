@@ -7,6 +7,7 @@ Raspberry Pi temperature (fan) control systemd service. [Frontend with nice char
 ```
 make deploy
 ```
+config/config.yml obviously must be changed, accordingly to the specific GPIO configuration - modules can be disabled or even sections deleted.
 
 # Real life usage example. Just Why?
 Dashboard with the most recent revision is publicly available [HERE](https://pi4.cdns.com.ua/charts).
