@@ -1,3 +1,6 @@
+# github.com/davecgh/go-spew v1.1.1
+## explicit
+github.com/davecgh/go-spew/spew
 # github.com/go-chi/chi/v5 v5.0.8
 ## explicit; go 1.14
 github.com/go-chi/chi/v5
@@ -7,14 +10,21 @@ github.com/go-pkgz/lgr
 # github.com/parMaster/htu21 v0.0.0-20230220190438-31e4538dc67a
 ## explicit; go 1.20
 github.com/parMaster/htu21
+# github.com/pmezard/go-difflib v1.0.0
+## explicit
+github.com/pmezard/go-difflib/difflib
 # github.com/sigurn/crc8 v0.0.0-20220107193325-2243fe600f9f
 ## explicit; go 1.17
 github.com/sigurn/crc8
-# github.com/stretchr/testify v1.8.1
+# github.com/stretchr/testify v1.8.2
 ## explicit; go 1.13
+github.com/stretchr/testify/assert
 # github.com/umputun/go-flags v1.5.1
 ## explicit; go 1.12
 github.com/umputun/go-flags
+# gopkg.in/yaml.v3 v3.0.1
+## explicit
+gopkg.in/yaml.v3
 # periph.io/x/conn/v3 v3.7.0
 ## explicit; go 1.17
 periph.io/x/conn/v3

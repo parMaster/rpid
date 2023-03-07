@@ -16,14 +16,13 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-pkgz/lgr"
-	"github.com/parMaster/htu21"
+	"github.com/parMaster/rpid/config"
 	flags "github.com/umputun/go-flags"
 	"periph.io/x/conn/v3/gpio"
 	"periph.io/x/conn/v3/gpio/gpioreg"
 	"periph.io/x/conn/v3/i2c"
 	"periph.io/x/conn/v3/i2c/i2creg"
 	"periph.io/x/conn/v3/physic"
-	"periph.io/x/devices/v3/bmxx80"
 	"periph.io/x/host/v3"
 )
 
@@ -34,88 +33,28 @@ const (
 )
 
 type Worker struct {
-	dbg bool
-	// persistent revs counter
-	revs int
-
-	// persistent temperature measurement
-	temp int
-
-	// GPIO Fan tachymeter connected to
-	// Tachymeter usually is a yellow wire in 3-pin fan connector
-	fanTachPin    string
-	fanControlPin string
-	fanControl    gpio.PinIO
-	tach          gpio.PinIn
-	tempHigh      int
-	tempLow       int
-
-	// pressure and ambient temperature data from bmp280 sensor
-	// to scan for i2c interfaces:
-	// $ i2cdetect -l
-	// i2c-4	i2c	400000002.i2c	I²C adapter
-	i2cBusNumber string
-	i2cBus       i2c.BusCloser
-	// to find out address of the device
-	// $ i2cdetect -y 4
-	bmp280Addr   uint16
-	bmp280Data   physic.Env
-	bmp280Device *bmxx80.Dev
-
-	// HTU21 sensor address
-	htu21Addr   uint16
-	htu21Data   physic.Env
-	htu21Device *htu21.Dev
-
-	// RPi file with milliCentigrades of CPU temperature
-	temperatureFileName string
-
-	// map of historical data
-	data historical
-
-	listen string
-
-	mx sync.Mutex
+	config  config.Parameters
+	revs    int // persistent revs counter
+	data    historical
+	i2cBus  i2c.BusCloser
+	modules Modules
+	mx      sync.Mutex
 }
 
-func StartNewWorker(cfg Options, ctx context.Context) {
-
+func StartNewWorker(config *config.Parameters, ctx context.Context) {
 	data := historical{
 		// Fan tachymeters
-		"revs":  {}, // momentary revs/sec
-		"rpm-m": {}, // rpm history by minute
-		"rpm-h": {}, // rpm history by hour
+		"revs": {}, // momentary revs/sec
+		"rpm":  {}, // rpm history by minute
 
 		// CPU Temperature in milliCentigrades
-		"temp":   {}, // momentary temp
-		"temp-m": {}, // temp history by minute
-		"temp-h": {}, // temp history by hour
-
-		// Ambient temperature from BMP280
-		"amb-temp-m": {}, // by minute
-		"amb-temp-h": {}, // by hour
-
-		// Atmospheric pressure from BMP280 in hPa
-		"press-m": {},
-		"press-h": {},
-
-		// Relative humidity from HTU21 in mRh (0.1%)
-		"rh-m": {},
-		"rh-h": {},
+		"t":    {}, // momentary temp
+		"temp": {}, // temp history by minute
 	}
 
 	w := &Worker{
-		data:                data,
-		dbg:                 cfg.Dbg,
-		fanTachPin:          cfg.FanTachPin,
-		fanControlPin:       cfg.FanControlPin,
-		tempHigh:            cfg.TempHigh,
-		tempLow:             cfg.TempLow,
-		listen:              cfg.Listen,
-		temperatureFileName: "/sys/class/thermal/thermal_zone0/temp",
-		i2cBusNumber:        cfg.I2C,
-		bmp280Addr:          0x76,
-		htu21Addr:           0x40,
+		config: *config,
+		data:   data,
 	}
 
 	var err error
@@ -125,20 +64,12 @@ func StartNewWorker(cfg Options, ctx context.Context) {
 		log.Fatal(err)
 	}
 
-	w.i2cBus, err = i2creg.Open(w.i2cBusNumber)
+	w.i2cBus, err = i2creg.Open(w.config.Modules.I2C)
 	if err != nil {
 		log.Fatalf("[ERROR] failed to open I²C: %v", err)
 	}
 
-	w.bmp280Device, err = bmxx80.NewI2C(w.i2cBus, w.bmp280Addr, &bmxx80.DefaultOpts)
-	if err != nil {
-		log.Fatalf("[ERROR] failed to initialize bme280: %v", err)
-	}
-
-	w.htu21Device, err = htu21.NewI2C(w.i2cBus, w.htu21Addr)
-	if err != nil {
-		log.Fatalf("[ERROR] failed to initialize htu21: %v", err)
-	}
+	w.loadModules()
 
 	go w.controlFan(ctx)
 	go w.startTach(ctx)
@@ -147,8 +78,8 @@ func StartNewWorker(cfg Options, ctx context.Context) {
 	go w.logEveryMinute(ctx)
 	go w.startServer(ctx)
 
-	log.Printf("Service started. Fan tach on %s, trigger on %s, listening to \"%s\"", w.fanTachPin, w.fanControlPin, w.listen)
-	log.Printf("Temps cfg: low=%d˚C, high=%d˚C", w.tempLow, w.tempHigh)
+	log.Printf("Service started. Fan tach on %s, trigger on %s, listening to \"%s\"", w.config.Fan.TachPin, w.config.Fan.ControlPin, w.config.Server.Listen)
+	log.Printf("Temps cfg: low=%d˚C, high=%d˚C", w.config.Fan.Low, w.config.Fan.High)
 
 	<-ctx.Done()
 	time.Sleep(2 * time.Second) // wait 2 secs till tach timeout (1 sec) hits
@@ -158,40 +89,8 @@ func StartNewWorker(cfg Options, ctx context.Context) {
 	}
 }
 
-func (w *Worker) getCPUTimeInState() (map[string]int, error) {
-	var (
-		out  = map[string]int{}
-		data []byte
-		err  error
-	)
-
-	if w.dbg {
-		data, err = os.ReadFile("cpu_time_in_state.txt")
-	} else {
-		data, err = os.ReadFile("/sys/devices/system/cpu/cpu0/cpufreq/stats/time_in_state")
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	for _, line := range strings.Split(string(data), "\n") {
-		if line == "" {
-			continue
-		}
-		parts := strings.Split(line, " ")
-		if len(parts) != 2 {
-			continue
-		}
-		parts[0] = parts[0][0 : len(parts[0])-3]
-		out[parts[0]], _ = strconv.Atoi(parts[1])
-		out[parts[0]] /= 100 // milliseconds to seconds
-	}
-	return out, nil
-}
-
-func (w *Worker) setFanState(state bool) error {
-	if err := w.fanControl.Out(gpio.Level(state)); err != nil {
+func (w *Worker) setFanState(fanControl gpio.PinIO, state bool) error {
+	if err := fanControl.Out(gpio.Level(state)); err != nil {
 		log.Printf("[ERROR] Changing fan state (%v): %e", state, err)
 		return err
 	}
@@ -200,41 +99,41 @@ func (w *Worker) setFanState(state bool) error {
 }
 
 func (w *Worker) controlFan(ctx context.Context) {
-	w.fanControl = gpioreg.ByName(w.fanControlPin)
-	if w.fanControl == nil {
-		log.Printf("[ERROR] Failed to find %s", w.fanControl)
+	fanControl := gpioreg.ByName(w.config.Fan.ControlPin)
+	if fanControl == nil {
+		log.Printf("[ERROR] Failed to find %s", fanControl)
 	}
 	time.Sleep(1 * time.Second)
 
-	tempHigh := w.tempHigh * 1000 // fan   activation temperature m˚C
-	tempLow := w.tempLow * 1000   // fan DEactivation temperature m˚C
+	tempHigh := w.config.Fan.High * 1000 // fan   activation temperature m˚C
+	tempLow := w.config.Fan.Low * 1000   // fan DEactivation temperature m˚C
 	ticker := time.NewTicker(10 * time.Second)
 	for {
 		select {
 		case <-ctx.Done():
 			log.Println("[DEBUG] Leaving the fan ON is always safer")
-			w.fanControl.Out(gpio.High)
-			w.fanControl.Halt()
+			fanControl.Out(gpio.High)
+			fanControl.Halt()
 			return
 		case <-ticker.C:
 		}
 
 		w.mx.Lock()
-		ma10sec, ma30sec, ma1min, ma3min := 0, 0, last(w.data["temp-m"]), 0
-		if len(w.data["temp"]) >= 10 {
-			ma10sec = avg(w.data["temp"][max(0, len(w.data["temp"])-9) : len(w.data["temp"])-1])
+		ma10sec, ma30sec, ma1min, ma3min := 0, 0, last(w.data["temp"]), 0
+		if len(w.data["t"]) >= 10 {
+			ma10sec = avg(w.data["t"][max(0, len(w.data["t"])-9) : len(w.data["t"])-1])
 		}
 		log.Printf("[DEBUG] 10 seconds moving average: %d", ma10sec)
 
-		if len(w.data["temp"]) >= 30 {
-			ma30sec = avg(w.data["temp"][max(0, len(w.data["temp"])-29) : len(w.data["temp"])-1])
+		if len(w.data["t"]) >= 30 {
+			ma30sec = avg(w.data["t"][max(0, len(w.data["t"])-29) : len(w.data["t"])-1])
 		}
 		log.Printf("[DEBUG] 30 seconds moving average: %d", ma30sec)
 
 		log.Printf("[DEBUG] 1 minute moving average: %d", ma1min)
 
-		if len(w.data["temp-m"]) >= 3 {
-			ma3min = avg(w.data["temp-m"][max(0, len(w.data["temp-m"])-2) : len(w.data["temp-m"])-1])
+		if len(w.data["temp"]) >= 3 {
+			ma3min = avg(w.data["temp"][max(0, len(w.data["temp"])-2) : len(w.data["temp"])-1])
 		}
 		log.Printf("[DEBUG] 3 minutes moving average: %d", ma3min)
 		w.mx.Unlock()
@@ -246,7 +145,7 @@ func (w *Worker) controlFan(ctx context.Context) {
 			ma1min == 0 || // No data
 			ma3min == 0 { //  No data
 
-			w.setFanState(true)
+			w.setFanState(fanControl, true)
 			continue
 		}
 
@@ -255,20 +154,19 @@ func (w *Worker) controlFan(ctx context.Context) {
 			ma1min < tempLow-1000 || // Low enough
 			ma30sec < tempLow-2000 || // Fast decline
 			ma10sec < tempLow-4000 { // Sudden drop
-			w.setFanState(false)
+			w.setFanState(fanControl, false)
 		}
 	}
 }
 
 func (w *Worker) startTach(ctx context.Context) {
-
-	w.tach = gpioreg.ByName(w.fanTachPin)
-	if w.tach == nil {
-		log.Fatalf("Failed to find %s", w.fanTachPin)
+	var tach gpio.PinIn = gpioreg.ByName(w.config.Fan.TachPin)
+	if tach == nil {
+		log.Fatalf("Failed to find %s", w.config.Fan.TachPin)
 	}
 
 	// Set pin as input, with an internal pull-up resistor:
-	if err := w.tach.In(gpio.PullUp, gpio.RisingEdge); err != nil {
+	if err := tach.In(gpio.PullUp, gpio.RisingEdge); err != nil {
 		log.Fatal(err)
 	}
 
@@ -277,13 +175,13 @@ func (w *Worker) startTach(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			log.Println("[DEBUG] Halting tachymeter")
-			if err := w.tach.Halt(); err != nil {
+			if err := tach.Halt(); err != nil {
 				log.Printf("[ERROR] Halting tachymeter: %e", err)
 			}
 			return
 		default:
 		}
-		if w.tach.WaitForEdge(time.Second) {
+		if tach.WaitForEdge(time.Second) {
 			w.revs++
 		}
 	}
@@ -291,7 +189,7 @@ func (w *Worker) startTach(ctx context.Context) {
 
 func (w *Worker) startServer(ctx context.Context) {
 	httpServer := &http.Server{
-		Addr:              w.listen,
+		Addr:              w.config.Server.Listen,
 		Handler:           w.router(),
 		ReadHeaderTimeout: time.Second,
 		WriteTimeout:      30 * time.Second,
@@ -316,11 +214,8 @@ func (w *Worker) router() http.Handler {
 
 		w.mx.Lock()
 		resp := map[string]int{
-			"temp-m":     last(w.data["temp-m"]) / 1000,
-			"amb-temp-m": last(w.data["amb-temp-m"]) / 100,
-			"press-m":    last(w.data["press-m"]),
-			"rh-m":       last(w.data["rh-m"]),
-			"rpm-m":      last(w.data["rpm-m"]),
+			"temp": last(w.data["temp"]) / 1000,
+			"rpm":  last(w.data["rpm"]),
 		}
 		w.mx.Unlock()
 
@@ -337,6 +232,7 @@ func (w *Worker) router() http.Handler {
 			Data        historical
 			Dates       []string
 			TimeInState map[string]int
+			Modules     map[string]historical
 		}
 		var err error
 
@@ -344,13 +240,22 @@ func (w *Worker) router() http.Handler {
 		out.Data["revs"] = []int{}
 		out.Dates = []string{}
 		now := time.Now()
-		for i := len(out.Data["temp-m"]); i > 0; i-- {
+		for i := len(out.Data["temp"]); i > 0; i-- {
 			out.Dates = append(out.Dates, now.Add(-1*time.Minute*time.Duration(i)).Format("2006-01-02 15:04"))
 		}
 
-		out.TimeInState, err = w.getCPUTimeInState()
+		out.TimeInState, err = getCPUTimeInState(w.config.Server.Dbg)
 		if err != nil {
 			log.Printf("[ERROR] failed to get cpu time in state: %v", err)
+		}
+
+		out.Modules = make(map[string]historical)
+		for _, m := range w.modules {
+			data, err := m.Report()
+			if err != nil {
+				log.Printf("[ERROR] %s: %v", m.Name(), err)
+			}
+			out.Modules[m.Name()] = data
 		}
 
 		json.NewEncoder(rw).Encode(out)
@@ -358,7 +263,7 @@ func (w *Worker) router() http.Handler {
 	})
 
 	router.Get("/charts", func(rw http.ResponseWriter, r *http.Request) {
-		if w.dbg {
+		if w.config.Server.Dbg {
 			if b, err := os.ReadFile("chart.html"); err == nil {
 				rw.Write([]byte(b))
 			}
@@ -379,23 +284,26 @@ func (w *Worker) logEverySecond(ctx context.Context) {
 		case <-ticker.C:
 		}
 
-		sysTemp, err := os.ReadFile(w.temperatureFileName)
+		var temp int
+		// Current temperature as reported by thermal zone (sensor), millidegree Celsius
+		// https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-class-thermal
+		sysTemp, err := os.ReadFile("/sys/class/thermal/thermal_zone0/temp")
 		if err != nil {
 			log.Printf("[ERROR] Can't read temperature file: %e", err)
-			w.temp = 0
+			temp = 0
 		} else {
-			w.temp, err = strconv.Atoi(string(sysTemp[0 : len(sysTemp)-1]))
+			temp, err = strconv.Atoi(string(sysTemp[0 : len(sysTemp)-1]))
 			if err != nil {
 				log.Printf("[ERROR] Converting temp data: %e", err)
 			}
 		}
 
-		log.Printf("[DEBUG] Temp: %d m˚C | Fan RPS/RPM: %d/%d\r\n", w.temp, w.revs, w.revs*60)
+		log.Printf("[DEBUG] Temp: %d m˚C | Fan RPS/RPM: %d/%d\r\n", temp, w.revs, w.revs*60)
 
 		w.mx.Lock()
 		w.data["revs"] = append(w.data["revs"], w.revs*60)
 		w.revs = 0
-		w.data["temp"] = append(w.data["temp"], w.temp)
+		w.data["t"] = append(w.data["t"], temp)
 		w.mx.Unlock()
 	}
 }
@@ -410,38 +318,81 @@ func (w *Worker) logEveryMinute(ctx context.Context) {
 		case <-ticker.C:
 		}
 
-		if err := w.bmp280Device.Sense(&w.bmp280Data); err != nil {
-			log.Fatal(err)
-		}
-		pressureHPa := w.bmp280Data.Pressure / HectoPascal
-		tempMilliC := int64(w.bmp280Data.Temperature-physic.ZeroCelsius) / 1000000
-
-		if err := w.htu21Device.Sense(&w.htu21Data); err != nil {
-			log.Fatal(err)
-		}
-		humidMilliRH := w.htu21Data.Humidity / 10000
-
 		w.mx.Lock()
-		w.data["rpm-m"] = append(w.data["rpm-m"], avg(w.data["revs"]))
+		w.data["rpm"] = append(w.data["rpm"], avg(w.data["revs"]))
 		w.data["revs"] = []int{}
-
-		w.data["temp-m"] = append(w.data["temp-m"], avg(w.data["temp"][max(0, len(w.data["temp"])-60):len(w.data["temp"])-1]))
+		w.data["temp"] = append(w.data["temp"], avg(w.data["t"][max(0, len(w.data["t"])-60):len(w.data["t"])-1]))
 
 		// "scrolling" temperature history, leave only last 60 seconds
-		if len(w.data["temp"]) > 100 {
-			w.data["temp"] = w.data["temp"][len(w.data["temp"])-60 : len(w.data["temp"])-1]
+		if len(w.data["t"]) > 100 {
+			w.data["t"] = w.data["t"][len(w.data["t"])-60 : len(w.data["t"])-1]
 		}
 
-		w.data["amb-temp-m"] = append(w.data["amb-temp-m"], int(tempMilliC))
-		w.data["press-m"] = append(w.data["press-m"], int(pressureHPa))
-		w.data["rh-m"] = append(w.data["rh-m"], int(humidMilliRH))
+		log.Printf("CPU: %d m˚C\r\n", last(w.data["temp"]))
+		log.Printf("Fan: %d rpm\r\n", last(w.data["rpm"]))
 
-		log.Printf("CPU: %d m˚C\r\n", last(w.data["temp-m"]))
-		log.Printf("Fan: %d rpm\r\n", last(w.data["rpm-m"]))
-		log.Printf("BMP280: %8s | %d hPa \n", w.bmp280Data.Temperature, pressureHPa)
-		log.Printf("HTU21: %8s | %s (%d mRh) \n", w.htu21Data.Temperature, w.htu21Data.Humidity, humidMilliRH)
+		for _, m := range w.modules {
+			err := m.Collect()
+			if err != nil {
+				log.Printf("[ERROR] %s: %v", m.Name(), err)
+			}
+		}
+
 		w.mx.Unlock()
 	}
+}
+
+func getCPUTimeInState(dbg bool) (map[string]int, error) {
+	var (
+		out  = map[string]int{}
+		data []byte
+		err  error
+	)
+
+	if dbg {
+		data, err = os.ReadFile("cpu_time_in_state.txt")
+	} else { // https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-class-thermal
+		data, err = os.ReadFile("/sys/devices/system/cpu/cpu0/cpufreq/stats/time_in_state")
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	for _, line := range strings.Split(string(data), "\n") {
+		if line == "" {
+			continue
+		}
+		parts := strings.Split(line, " ")
+		if len(parts) != 2 {
+			continue
+		}
+		parts[0] = parts[0][0 : len(parts[0])-3]
+		out[parts[0]], _ = strconv.Atoi(parts[1])
+		out[parts[0]] /= 100 // tens of milliseconds to seconds
+	}
+	return out, nil
+}
+
+// Load modules
+func (w *Worker) loadModules() (names []string) {
+
+	modbmp280, err := LoadBmp280Reporter(w.config.Modules.BMP280, w.i2cBus)
+	if err != nil {
+		log.Printf("%e", err)
+	} else {
+		w.modules = append(w.modules, modbmp280)
+		names = append(names, modbmp280.Name())
+	}
+
+	modhtu21, err := LoadHtu21Reporter(w.config.Modules.HTU21, w.i2cBus)
+	if err != nil {
+		log.Printf("%e", err)
+	} else {
+		w.modules = append(w.modules, modhtu21)
+		names = append(names, modhtu21.Name())
+	}
+	return
 }
 
 func max(a, b int) int {
@@ -470,19 +421,13 @@ func avg(slice []int) int {
 }
 
 type Options struct {
-	Listen        string `long:"listen" env:"LISTEN" default:"pi4.local:8095" description:"Port for http server to listen to"`
-	FanTachPin    string `long:"tach-pin" env:"TACH" default:"GPIO15" description:"GPIO with fan tachymeter connected"`
-	FanControlPin string `long:"control-pin" env:"CONTROL" default:"GPIO18" description:"GPIO with fan control connected - base of the key transistor"`
-	TempHigh      int    `long:"temp-high" env:"TEMPHIGH" default:"45" description:"Fan activation temperature"`
-	TempLow       int    `long:"temp-low" env:"TEMPLOW" default:"40" description:"Fan deactivation temperature"`
-	I2C           string `long:"i2cbus" env:"I2C" default:"4" description:"I2C bus number"`
-	Dbg           bool   `long:"dbg" env:"DEBUG" description:"show debug info"`
+	Config string `long:"config" env:"CONFIG" description:"yaml config file name"`
+	Dbg    bool   `long:"dbg" env:"DEBUG" description:"show debug info"`
 }
-
-var opts Options
 
 func main() {
 	// Parsing cmd parameters
+	var opts Options
 	p := flags.NewParser(&opts, flags.PassDoubleDash|flags.HelpFlag)
 	if _, err := p.Parse(); err != nil {
 		if err.(*flags.Error).Type != flags.ErrHelp {
@@ -491,6 +436,16 @@ func main() {
 		}
 		p.WriteHelp(os.Stderr)
 		os.Exit(2)
+	}
+
+	var conf *config.Parameters
+	if opts.Config != "" {
+		var err error
+		conf, err = config.NewConfig(opts.Config)
+		if err != nil {
+			log.Fatalf("[ERROR] can't load config, %s", err)
+		}
+		conf.Server.Dbg = opts.Dbg
 	}
 
 	// Logger setup
@@ -519,5 +474,5 @@ func main() {
 		cancel()
 	}()
 
-	StartNewWorker(opts, ctx)
+	StartNewWorker(conf, ctx)
 }

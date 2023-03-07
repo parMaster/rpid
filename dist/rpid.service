@@ -14,7 +14,7 @@ Type=simple
 Restart=always
 RestartSec=1
 User=pi
-ExecStart=/usr/bin/rpid --listen=:8095
+ExecStart=/usr/bin/rpid --config /etc/rpid/config.yml
 StandardOutput=append:/var/log/rpid.log
 StandardError=append:/var/log/rpid.err
 

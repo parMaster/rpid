@@ -861,13 +861,13 @@ async function loadChart() {
 
 	var temp = {
 		x: data["Dates"],
-		y: data["Data"]["temp-m"],
+		y: data["Data"]["temp"],
 		type: 'scatter',
 		name: 'CPU, m˚C'
 	};
 	var rpm = {
 		x: data["Dates"],
-		y: data["Data"]["rpm-m"],
+		y: data["Data"]["rpm"],
 		type: 'scatter',
 		name: 'Fan RPM',
 		yaxis: 'y2',
@@ -892,13 +892,13 @@ async function loadChart() {
 
 	var amb_temp = {
 		x: data["Dates"],
-		y: data["Data"]["amb-temp-m"],
+		y: data["Modules"]["bmp280"]["temp"],
 		type: 'scatter',
 		name: 'Ambient temp, m˚C'
 	};
 	var rh_m = {
 		x: data["Dates"],
-		y: data["Data"]["rh-m"],
+		y: data["Modules"]["htu21"]["humidity"],
 		type: 'scatter',
 		name: 'Relative Humidity, mRh',
 		yaxis: 'y2',
@@ -921,7 +921,7 @@ async function loadChart() {
 
 	var press = {
 		x: data["Dates"],
-		y: data["Data"]["press-m"],
+		y: data["Modules"]["bmp280"]["pressure"],
 		type: 'scatter',
 		name: 'Atmospheric pressure, mPa'
 	};

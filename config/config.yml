@@ -1,0 +1,13 @@
+server:
+  listen: :8095
+fan:
+  tachPin: GPIO15
+  controlPin: GPIO18
+  high: 45
+  low: 40
+modules:
+  i2c: 4
+  bmp280:
+    addr: 0x76
+  htu21:
+    addr: 0x40
