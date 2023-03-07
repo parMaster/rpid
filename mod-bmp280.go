@@ -21,6 +21,10 @@ type Bmp280Reporter struct {
 }
 
 func LoadBmp280Reporter(cfg config.BMP280, i2cBus i2c.BusCloser) (*Bmp280Reporter, error) {
+	if !cfg.Enabled {
+		return nil, fmt.Errorf("Bmp280Reporter is not enabled")
+	}
+
 	data := historical{
 		"pressure": {}, // Atmospheric pressure from BMP280 in hPa
 		"temp":     {}, // Temperature from BMP280 in mC
@@ -53,7 +57,7 @@ func (r *Bmp280Reporter) Collect() error {
 	return nil
 }
 
-func (r *Bmp280Reporter) Report() (historical, error) {
+func (r *Bmp280Reporter) Report() (interface{}, error) {
 	r.mx.Lock()
 	defer r.mx.Unlock()
 	return r.data, nil

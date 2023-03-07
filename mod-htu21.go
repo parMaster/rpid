@@ -21,6 +21,9 @@ type Htu21Reporter struct {
 }
 
 func LoadHtu21Reporter(cfg config.HTU21, i2cBus i2c.BusCloser) (*Htu21Reporter, error) {
+	if !cfg.Enabled {
+		return nil, fmt.Errorf("Htu21Reporter is not enabled")
+	}
 	data := historical{
 		"humidity": {}, // Humidity from HTU21 in mRh
 		"temp":     {}, // unused
@@ -42,17 +45,18 @@ func (r *Htu21Reporter) Collect() error {
 		return err
 	}
 	humidMilliRH := r.htu21Data.Humidity / 10000
+	tempMilliC := int64(r.htu21Data.Temperature-physic.ZeroCelsius) / 1000000
 
 	r.mx.Lock()
 	r.data["humidity"] = append(r.data["humidity"], int(humidMilliRH))
-	r.data["temp"] = append(r.data["temp"], int(r.htu21Data.Temperature))
+	r.data["temp"] = append(r.data["temp"], int(tempMilliC))
 	r.mx.Unlock()
 
 	log.Printf("HTU21: %8s | %s (%d mRh) \n", r.htu21Data.Temperature, r.htu21Data.Humidity, humidMilliRH)
 	return nil
 }
 
-func (r *Htu21Reporter) Report() (historical, error) {
+func (r *Htu21Reporter) Report() (interface{}, error) {
 	r.mx.Lock()
 	defer r.mx.Unlock()
 	return r.data, nil

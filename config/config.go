@@ -10,16 +10,19 @@ import (
 
 // Parameters is the main configuration struct
 type Parameters struct {
-	Server  Server `yaml:"server"`
-	Fan     Fan    `yaml:"fan"`
-	Modules struct {
-		BMP280 BMP280 `yaml:"bmp280"`
-		HTU21  HTU21  `yaml:"htu21"`
-		// to scan for i2c interfaces:
-		// $ i2cdetect -l
-		// i2c-4	i2c	400000002.i2c	I²C adapter
-		I2C string `yaml:"i2c"`
-	} `yaml:"modules"`
+	Server  Server  `yaml:"server"`
+	Fan     Fan     `yaml:"fan"`
+	Modules Modules `yaml:"modules,omitempty"`
+}
+
+type Modules struct {
+	BMP280 BMP280 `yaml:"bmp280,omitempty"`
+	HTU21  HTU21  `yaml:"htu21,omitempty"`
+	System System `yaml:"system,omitempty"`
+	// to scan for i2c interfaces:
+	// $ i2cdetect -l
+	// i2c-4	i2c	400000002.i2c	I²C adapter
+	I2C string `yaml:"i2c"`
 }
 
 type Fan struct {
@@ -40,17 +43,21 @@ type Server struct {
 // to find out address of the device, use i2cdetect with -y option with the bus number
 // $ i2cdetect -y 4
 type BMP280 struct {
-	Bmp280Addr uint16 `yaml:"addr"`
+	Enabled    bool   `yaml:"enabled,omitempty"`
+	Bmp280Addr uint16 `yaml:"addr,omitempty"`
 }
 type HTU21 struct {
-	Htu21Addr uint16 `yaml:"addr"`
+	Enabled   bool   `yaml:"enabled,omitempty"`
+	Htu21Addr uint16 `yaml:"addr,omitempty"`
+}
+type System struct {
+	Enabled bool `yaml:"enabled,omitempty"`
 }
 
 // New creates a new Parameters from the given file
 func NewConfig(fname string) (*Parameters, error) {
 	p := &Parameters{}
 	data, err := os.ReadFile(fname)
-	// log.Printf("[DEBUG] config: %s", data)
 	if err != nil {
 		log.Printf("[ERROR] can't read config %s: %e", fname, err)
 		return nil, fmt.Errorf("can't read config %s: %w", fname, err)

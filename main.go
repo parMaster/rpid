@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -229,12 +228,10 @@ func (w *Worker) router() http.Handler {
 		rw.Header().Set("Access-Control-Allow-Origin", "*")
 
 		var out struct {
-			Data        historical
-			Dates       []string
-			TimeInState map[string]int
-			Modules     map[string]historical
+			Data    historical
+			Dates   []string
+			Modules map[string]interface{}
 		}
-		var err error
 
 		out.Data = w.data
 		out.Data["revs"] = []int{}
@@ -244,12 +241,7 @@ func (w *Worker) router() http.Handler {
 			out.Dates = append(out.Dates, now.Add(-1*time.Minute*time.Duration(i)).Format("2006-01-02 15:04"))
 		}
 
-		out.TimeInState, err = getCPUTimeInState(w.config.Server.Dbg)
-		if err != nil {
-			log.Printf("[ERROR] failed to get cpu time in state: %v", err)
-		}
-
-		out.Modules = make(map[string]historical)
+		out.Modules = make(map[string]interface{})
 		for _, m := range w.modules {
 			data, err := m.Report()
 			if err != nil {
@@ -323,7 +315,7 @@ func (w *Worker) logEveryMinute(ctx context.Context) {
 		w.data["revs"] = []int{}
 		w.data["temp"] = append(w.data["temp"], avg(w.data["t"][max(0, len(w.data["t"])-60):len(w.data["t"])-1]))
 
-		// "scrolling" temperature history, leave only last 60 seconds
+		// "scrolling" temperature history, leave only last 60-120 seconds
 		if len(w.data["t"]) > 100 {
 			w.data["t"] = w.data["t"][len(w.data["t"])-60 : len(w.data["t"])-1]
 		}
@@ -342,56 +334,39 @@ func (w *Worker) logEveryMinute(ctx context.Context) {
 	}
 }
 
-func getCPUTimeInState(dbg bool) (map[string]int, error) {
-	var (
-		out  = map[string]int{}
-		data []byte
-		err  error
-	)
-
-	if dbg {
-		data, err = os.ReadFile("cpu_time_in_state.txt")
-	} else { // https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-class-thermal
-		data, err = os.ReadFile("/sys/devices/system/cpu/cpu0/cpufreq/stats/time_in_state")
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	for _, line := range strings.Split(string(data), "\n") {
-		if line == "" {
-			continue
-		}
-		parts := strings.Split(line, " ")
-		if len(parts) != 2 {
-			continue
-		}
-		parts[0] = parts[0][0 : len(parts[0])-3]
-		out[parts[0]], _ = strconv.Atoi(parts[1])
-		out[parts[0]] /= 100 // tens of milliseconds to seconds
-	}
-	return out, nil
-}
-
 // Load modules
 func (w *Worker) loadModules() (names []string) {
 
-	modbmp280, err := LoadBmp280Reporter(w.config.Modules.BMP280, w.i2cBus)
-	if err != nil {
-		log.Printf("%e", err)
-	} else {
-		w.modules = append(w.modules, modbmp280)
-		names = append(names, modbmp280.Name())
+	if w.config.Modules.System.Enabled {
+		sys, err := LoadSystemReporter(w.config.Modules.System, w.config.Server.Dbg)
+		if err != nil {
+			log.Printf("%e", err)
+		} else {
+			w.modules = append(w.modules, sys)
+			names = append(names, sys.Name())
+		}
 	}
 
-	modhtu21, err := LoadHtu21Reporter(w.config.Modules.HTU21, w.i2cBus)
-	if err != nil {
-		log.Printf("%e", err)
-	} else {
-		w.modules = append(w.modules, modhtu21)
-		names = append(names, modhtu21.Name())
+	if w.config.Modules.BMP280.Enabled {
+		modbmp280, err := LoadBmp280Reporter(w.config.Modules.BMP280, w.i2cBus)
+		if err != nil {
+			log.Printf("%e", err)
+		} else {
+			w.modules = append(w.modules, modbmp280)
+			names = append(names, modbmp280.Name())
+		}
 	}
+
+	if w.config.Modules.HTU21.Enabled {
+		modhtu21, err := LoadHtu21Reporter(w.config.Modules.HTU21, w.i2cBus)
+		if err != nil {
+			log.Printf("%e", err)
+		} else {
+			w.modules = append(w.modules, modhtu21)
+			names = append(names, modhtu21.Name())
+		}
+	}
+
 	return
 }
 

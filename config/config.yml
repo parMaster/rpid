@@ -8,6 +8,10 @@ fan:
 modules:
   i2c: 4
   bmp280:
+    enabled: true
     addr: 0x76
   htu21:
+    enabled: true
     addr: 0x40
+  system:
+    enabled: true

@@ -14,10 +14,11 @@ const chart_html = `<title>RPId Charts</title>
 </head>
 
 <body>
-	<div id='temp_rpm_chart'><!-- Plotly chart will be drawn inside this DIV --></div>
+	<div id='TempRpmChart'><!-- Plotly chart will be drawn inside this DIV --></div>
+	<div id='LoadAvg'><!-- Plotly chart will be drawn inside this DIV --></div>
 	<div id='TimeInState'><!-- Plotly chart will be drawn inside this DIV --></div>
-	<div id='amb_temp_chart'><!-- Plotly chart will be drawn inside this DIV --></div>
-	<div id='press_chart'><!-- Plotly chart will be drawn inside this DIV --></div>
+	<div id='AmbTempChart'><!-- Plotly chart will be drawn inside this DIV --></div>
+	<div id='PressureChart'><!-- Plotly chart will be drawn inside this DIV --></div>
 
 <script>
 async function getData() {
@@ -890,70 +891,94 @@ async function loadChart() {
 		template: template
 	}
 
-	var amb_temp = {
-		x: data["Dates"],
-		y: data["Modules"]["bmp280"]["temp"],
-		type: 'scatter',
-		name: 'Ambient temp, m˚C'
-	};
-	var rh_m = {
-		x: data["Dates"],
-		y: data["Modules"]["htu21"]["humidity"],
-		type: 'scatter',
-		name: 'Relative Humidity, mRh',
-		yaxis: 'y2',
-	};
+	// check if there is object with name "Modules" and if it has "bmp280" and "htu21" keys
+	if (data["Modules"] && data["Modules"]["bmp280"] && data["Modules"]["htu21"]
+		&& data["Modules"]["bmp280"]["temp"] && data["Modules"]["htu21"]["humidity"]) {
 
-	var AmbRHLayout = {
-		yaxis: {
-			title: 'Ambient temp, m˚C',
-			gridcolor: 'rgba(99, 110, 250, 0.2)'
-		},
-		yaxis2: {
-			title: 'Relative Humidity, mRh',
-			overlaying: 'y',
-			side: 'right',
-			gridcolor: 'rgba(239, 85, 59, 0.2)'
-		},
-		margin: {"t": 32, "b": 0, "l": 0, "r": 0},
-		template: template
+		var amb_temp = {
+			x: data["Dates"],
+			y: data["Modules"]["bmp280"]["temp"],
+			type: 'scatter',
+			name: 'Ambient temp, m˚C'
+		};
+		var rh_m = {
+			x: data["Dates"],
+			y: data["Modules"]["htu21"]["humidity"],
+			type: 'scatter',
+			name: 'Relative Humidity, mRh',
+			yaxis: 'y2',
+		};	
+
+		var AmbRHLayout = {
+			yaxis: {
+				title: 'Ambient temp, m˚C',
+				gridcolor: 'rgba(99, 110, 250, 0.2)'
+			},
+			yaxis2: {
+				title: 'Relative Humidity, mRh',
+				overlaying: 'y',
+				side: 'right',
+				gridcolor: 'rgba(239, 85, 59, 0.2)'
+			},
+			margin: {"t": 32, "b": 0, "l": 0, "r": 0},
+			height: 400,
+			template: template
+		}
+
+		var press = {
+			x: data["Dates"],
+			y: data["Modules"]["bmp280"]["pressure"],
+			type: 'scatter',
+			name: 'Atmospheric pressure, mPa'
+		};
+		var PressLayout = {
+			title: "Atmospheric pressure, mPa", 
+			margin: {"t": 64, "b": 0, "l": 0, "r": 0},
+			template: template
+		};
 	}
 
-	var press = {
-		x: data["Dates"],
-		y: data["Modules"]["bmp280"]["pressure"],
-		type: 'scatter',
-		name: 'Atmospheric pressure, mPa'
-	};
-	var PressLayout = {
-		title: "Atmospheric pressure, mPa", 
-		template: template
-	};
-
-	var TimeInState = {
-		type:"pie",
-		values: Object.values(data["TimeInState"]),
-		labels: Object.keys(data["TimeInState"]),
-		textinfo: "label",
-		insidetextorientation: "radial",
-		automargin: true
-	}
-	var TISlayout = {
-		title: 'CPU Time in Frequency, seconds in MHz',
-		height: 400,
-		width: 400,
-		margin: {"t": 32, "b": 0, "l": 0, "r": 0},
-		showlegend: true,
-		margin: {"t": 32, "b": 0, "l": 0, "r": 0},
-		template: template
+	// check if there is object with name "Modules" and if it has "system" key
+	if (data["Modules"] && data["Modules"]["system"] && data["Modules"]["system"]["LoadAvg"]) {
+		var LoadAvg = {
+			x: data["Dates"],
+			y: data["Modules"]["system"]["LoadAvg"]["1m"],
+			type: 'scatter',
+			name: 'CPU load'
+		};
+		var LoadAvgLayout = {
+			title: "CPU load", 
+			margin: {"t": 32, "b": 0, "l": 56, "r": 128},
+			height: 250,
+			template: template
+		};
 	}
 
-	Plotly.newPlot('temp_rpm_chart', [temp, rpm], TempRPMLayout);
+	// check if there is object with name "Modules" and if it has "system" key
+	if (data["Modules"] && data["Modules"]["system"] && data["Modules"]["system"]["TimeInState"]) {
+		var TimeInState = {
+			type:"pie",
+			values: Object.values(data["Modules"]["system"]["TimeInState"]),
+			labels: Object.keys(data["Modules"]["system"]["TimeInState"]),
+			textinfo: "label",
+			insidetextorientation: "radial",
+			automargin: true
+		}
+		var TISlayout = {
+			title: 'CPU Time in Frequency, seconds in MHz',
+			height: 400,
+			width: 400,
+			margin: {"t": 64, "b": 0, "l": 56, "r": 0},
+			showlegend: true,
+			template: template
+		}
+	}
+
+	Plotly.newPlot('TempRpmChart', [temp, rpm], TempRPMLayout);
 	Plotly.newPlot('TimeInState', [TimeInState], TISlayout);
-
-	Plotly.newPlot('amb_temp_chart', [amb_temp, rh_m], AmbRHLayout);
-
-	Plotly.newPlot('press_chart', [press], PressLayout);
+	Plotly.newPlot('LoadAvg', [LoadAvg], LoadAvgLayout);
+	Plotly.newPlot('AmbTempChart', [amb_temp, rh_m], AmbRHLayout);
+	Plotly.newPlot('PressureChart', [press], PressLayout);
 }
 
 var interval = setInterval(loadChart, 60000);
