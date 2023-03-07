@@ -22,7 +22,7 @@ type Modules struct {
 	// to scan for i2c interfaces:
 	// $ i2cdetect -l
 	// i2c-4	i2c	400000002.i2c	I²C adapter
-	I2C string `yaml:"i2c"`
+	I2C string `yaml:"i2c,omitempty"`
 }
 
 type Fan struct {

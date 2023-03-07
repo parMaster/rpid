@@ -11,9 +11,15 @@ import (
 	"github.com/parMaster/rpid/config"
 )
 
+type ShortFloat float64 // for JSON, to leave only 2 digits after the point
+
+func (f ShortFloat) MarshalJSON() ([]byte, error) {
+	return []byte(fmt.Sprintf("%.2f", f)), nil
+}
+
 type Response struct {
 	TimeInState map[string]int
-	LoadAvg     map[string][]float64
+	LoadAvg     map[string][]ShortFloat
 }
 
 type SystemReporter struct {
@@ -31,7 +37,7 @@ func LoadSystemReporter(cfg config.System, dbg bool) (*SystemReporter, error) {
 		dbg: dbg,
 		data: Response{
 			TimeInState: map[string]int{},
-			LoadAvg:     map[string][]float64{},
+			LoadAvg:     map[string][]ShortFloat{},
 		},
 	}, nil
 }
@@ -98,9 +104,9 @@ func (r *SystemReporter) getCPUTimeInState(dbg bool) (map[string]int, error) {
 }
 
 // Load average for last 1, 5 and 15 minutes
-func (r *SystemReporter) getLoadAvg(dbg bool) (map[string]float64, error) {
+func (r *SystemReporter) getLoadAvg(dbg bool) (map[string]ShortFloat, error) {
 	var (
-		out  = map[string]float64{}
+		out  = map[string]ShortFloat{}
 		data []byte
 		err  error
 	)
@@ -121,7 +127,8 @@ func (r *SystemReporter) getLoadAvg(dbg bool) (map[string]float64, error) {
 	}
 
 	for i, v := range []string{"1m", "5m", "15m"} {
-		out[v], _ = strconv.ParseFloat(parts[i], 32)
+		fv, _ := strconv.ParseFloat(parts[i], 32)
+		out[v] = ShortFloat(fv)
 	}
 	return out, nil
 }

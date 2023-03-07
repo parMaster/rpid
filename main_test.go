@@ -34,7 +34,7 @@ func Test_SystemReporter(t *testing.T) {
 			"800":  6126,
 			"900":  4051,
 		},
-		LoadAvg: map[string][]float64{
+		LoadAvg: map[string][]ShortFloat{
 			"1m": {0.12},
 		}}
 
