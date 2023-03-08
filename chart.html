@@ -21,7 +21,7 @@
 
 <script>
 async function getData() {
-    let url = 'http://pi4.local:8095/fullData';
+    let url = 'http://pi4.local:8096/fullData';
     try {
         let resp = await fetch(url);
         return await resp.json();
@@ -947,7 +947,7 @@ async function loadChart() {
 		};
 		var LoadAvgLayout = {
 			title: "CPU load", 
-			margin: {"t": 32, "b": 0, "l": 56, "r": 128},
+			margin: {"t": 32, "b": 0, "l": 48, "r": 128},
 			height: 250,
 			template: template
 		};

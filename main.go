@@ -21,15 +21,10 @@ import (
 	"periph.io/x/conn/v3/gpio/gpioreg"
 	"periph.io/x/conn/v3/i2c"
 	"periph.io/x/conn/v3/i2c/i2creg"
-	"periph.io/x/conn/v3/physic"
 	"periph.io/x/host/v3"
 )
 
 type historical map[string][]int
-
-const (
-	HectoPascal physic.Pressure = 100 * physic.Pascal
-)
 
 type Worker struct {
 	config  config.Parameters
@@ -69,6 +64,7 @@ func StartNewWorker(config *config.Parameters, ctx context.Context) {
 	}
 
 	w.loadModules()
+	log.Printf("[DEBUG] Loaded modules: %s", w.modules)
 
 	go w.controlFan(ctx)
 	go w.startTach(ctx)
@@ -210,7 +206,6 @@ func (w *Worker) router() http.Handler {
 	router := chi.NewRouter()
 
 	router.Get("/status", func(rw http.ResponseWriter, r *http.Request) {
-
 		w.mx.Lock()
 		resp := map[string]int{
 			"temp": last(w.data["temp"]) / 1000,

@@ -948,7 +948,7 @@ async function loadChart() {
 		};
 		var LoadAvgLayout = {
 			title: "CPU load", 
-			margin: {"t": 32, "b": 0, "l": 56, "r": 128},
+			margin: {"t": 32, "b": 0, "l": 48, "r": 128},
 			height: 250,
 			template: template
 		};

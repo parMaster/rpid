@@ -17,6 +17,10 @@ func (f ShortFloat) MarshalJSON() ([]byte, error) {
 	return []byte(fmt.Sprintf("%.2f", f)), nil
 }
 
+func (f ShortFloat) String() string {
+	return fmt.Sprintf("%.2f", f)
+}
+
 type Response struct {
 	TimeInState map[string]int
 	LoadAvg     map[string][]ShortFloat
