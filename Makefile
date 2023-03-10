@@ -11,7 +11,7 @@ info:
 
 deploy:
 	make build
-	sudo systemctl stop rpid.service
+	sudo systemctl stop rpid.service || true
 	sudo cp dist/rpid /usr/bin/
 	sudo cp dist/rpid.service /etc/systemd/system/
 	sudo mkdir -p /etc/rpid
