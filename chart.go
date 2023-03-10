@@ -866,30 +866,37 @@ async function loadChart() {
 		type: 'scatter',
 		name: 'CPU, m˚C'
 	};
-	var rpm = {
-		x: data["Dates"],
-		y: data["Data"]["rpm"],
-		type: 'scatter',
-		name: 'Fan RPM',
-		yaxis: 'y2',
-	};
 
 	var TempRPMLayout = {
 		yaxis: {
 			title: 'CPU, m˚C', 
 			gridcolor: 'rgba(99, 110, 250, 0.2)'
 		},
-		yaxis2: {
+		margin: {"t": 32, "b": 0, "l": 0, "r": 0},
+		height: 400,
+		template: template
+	}
+	plots = [temp];
+
+	// check if there rpm data
+	if (data["Data"]["rpm"] != null) {
+		var rpm = {
+			x: data["Dates"],
+			y: data["Data"]["rpm"],
+			type: 'scatter',
+			name: 'Fan RPM',
+			yaxis: 'y2',
+		};
+		TempRPMLayout.yaxis2 = {
 			title: 'Fan RPM',
 			overlaying: 'y',
 			side: 'right',
 			gridcolor: 'rgba(239, 85, 59, 0.2)',
 			showgrid: false,
-		},
-		margin: {"t": 32, "b": 0, "l": 0, "r": 0},
-		height: 400,
-		template: template
+		}
+		plots.push(rpm);
 	}
+	Plotly.newPlot('TempRpmChart', plots, TempRPMLayout);
 
 	// check if there is object with name "Modules" and if it has "bmp280" and "htu21" keys
 	if (data["Modules"] && data["Modules"]["bmp280"] && data["Modules"]["htu21"]
@@ -936,6 +943,8 @@ async function loadChart() {
 			margin: {"t": 64, "b": 0, "l": 0, "r": 0},
 			template: template
 		};
+		Plotly.newPlot('AmbTempChart', [amb_temp, rh_m], AmbRHLayout);
+		Plotly.newPlot('PressureChart', [press], PressLayout);
 	}
 
 	// check if there is object with name "Modules" and if it has "system" key
@@ -952,6 +961,7 @@ async function loadChart() {
 			height: 250,
 			template: template
 		};
+		Plotly.newPlot('LoadAvg', [LoadAvg], LoadAvgLayout);
 	}
 
 	// check if there is object with name "Modules" and if it has "system" key
@@ -972,13 +982,8 @@ async function loadChart() {
 			showlegend: true,
 			template: template
 		}
+		Plotly.newPlot('TimeInState', [TimeInState], TISlayout);
 	}
-
-	Plotly.newPlot('TempRpmChart', [temp, rpm], TempRPMLayout);
-	Plotly.newPlot('TimeInState', [TimeInState], TISlayout);
-	Plotly.newPlot('LoadAvg', [LoadAvg], LoadAvgLayout);
-	Plotly.newPlot('AmbTempChart', [amb_temp, rh_m], AmbRHLayout);
-	Plotly.newPlot('PressureChart', [press], PressLayout);
 }
 
 var interval = setInterval(loadChart, 60000);

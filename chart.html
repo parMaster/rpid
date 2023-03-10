@@ -21,7 +21,7 @@
 
 <script>
 async function getData() {
-    let url = 'http://pizero.local:8090/fullData';
+    let url = 'http://pi4.local:8096/fullData';
     try {
         let resp = await fetch(url);
         return await resp.json();
@@ -875,6 +875,7 @@ async function loadChart() {
 		height: 400,
 		template: template
 	}
+	plots = [temp];
 
 	// check if there rpm data
 	if (data["Data"]["rpm"] != null) {
@@ -892,7 +893,9 @@ async function loadChart() {
 			gridcolor: 'rgba(239, 85, 59, 0.2)',
 			showgrid: false,
 		}
+		plots.push(rpm);
 	}
+	Plotly.newPlot('TempRpmChart', plots, TempRPMLayout);
 
 	// check if there is object with name "Modules" and if it has "bmp280" and "htu21" keys
 	if (data["Modules"] && data["Modules"]["bmp280"] && data["Modules"]["htu21"]
@@ -939,6 +942,8 @@ async function loadChart() {
 			margin: {"t": 64, "b": 0, "l": 0, "r": 0},
 			template: template
 		};
+		Plotly.newPlot('AmbTempChart', [amb_temp, rh_m], AmbRHLayout);
+		Plotly.newPlot('PressureChart', [press], PressLayout);
 	}
 
 	// check if there is object with name "Modules" and if it has "system" key
@@ -955,6 +960,7 @@ async function loadChart() {
 			height: 250,
 			template: template
 		};
+		Plotly.newPlot('LoadAvg', [LoadAvg], LoadAvgLayout);
 	}
 
 	// check if there is object with name "Modules" and if it has "system" key
@@ -975,13 +981,8 @@ async function loadChart() {
 			showlegend: true,
 			template: template
 		}
+		Plotly.newPlot('TimeInState', [TimeInState], TISlayout);
 	}
-
-	Plotly.newPlot('TempRpmChart', [temp, rpm], TempRPMLayout);
-	Plotly.newPlot('TimeInState', [TimeInState], TISlayout);
-	Plotly.newPlot('LoadAvg', [LoadAvg], LoadAvgLayout);
-	Plotly.newPlot('AmbTempChart', [amb_temp, rh_m], AmbRHLayout);
-	Plotly.newPlot('PressureChart', [press], PressLayout);
 }
 
 var interval = setInterval(loadChart, 60000);
