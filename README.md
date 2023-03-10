@@ -3,11 +3,9 @@ Raspberry Pi temperature (fan) control systemd service. [Frontend with nice char
 
 # Setup
 - pi user must be added to the same group as /dev/gpiomem in ([source](https://raspberrypi.stackexchange.com/questions/40105/access-gpio-pins-without-root-no-access-to-dev-mem-try-running-as-root)).
-- systemd service is supposed to be easily deployable by
-```
-make deploy
-```
-config/config.yml obviously must be changed, accordingly to the specific GPIO configuration - modules can be disabled or even sections deleted.
+- i2c interface should be enabled using `Interface Options` menu in `raspi-config`
+- systemd service is supposed to be easily deployable by `make deploy`
+- config/config.yml obviously must be changed, accordingly to the specific GPIO configuration - modules can be disabled or even sections deleted.
 
 # Real life usage example. Just Why?
 Dashboard with the most recent revision is publicly available [HERE](https://pi4.cdns.com.ua/charts).
