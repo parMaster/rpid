@@ -21,7 +21,7 @@
 
 <script>
 async function getData() {
-    let url = 'http://pi4.local:8096/fullData';
+    let url = 'http://pizero.local:8090/fullData';
     try {
         let resp = await fetch(url);
         return await resp.json();
@@ -865,29 +865,33 @@ async function loadChart() {
 		type: 'scatter',
 		name: 'CPU, m˚C'
 	};
-	var rpm = {
-		x: data["Dates"],
-		y: data["Data"]["rpm"],
-		type: 'scatter',
-		name: 'Fan RPM',
-		yaxis: 'y2',
-	};
 
 	var TempRPMLayout = {
 		yaxis: {
 			title: 'CPU, m˚C', 
 			gridcolor: 'rgba(99, 110, 250, 0.2)'
 		},
-		yaxis2: {
+		margin: {"t": 32, "b": 0, "l": 0, "r": 0},
+		height: 400,
+		template: template
+	}
+
+	// check if there rpm data
+	if (data["Data"]["rpm"] != null) {
+		var rpm = {
+			x: data["Dates"],
+			y: data["Data"]["rpm"],
+			type: 'scatter',
+			name: 'Fan RPM',
+			yaxis: 'y2',
+		};
+		TempRPMLayout.yaxis2 = {
 			title: 'Fan RPM',
 			overlaying: 'y',
 			side: 'right',
 			gridcolor: 'rgba(239, 85, 59, 0.2)',
 			showgrid: false,
-		},
-		margin: {"t": 32, "b": 0, "l": 0, "r": 0},
-		height: 400,
-		template: template
+		}
 	}
 
 	// check if there is object with name "Modules" and if it has "bmp280" and "htu21" keys

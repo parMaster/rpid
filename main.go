@@ -37,10 +37,6 @@ type Worker struct {
 
 func StartNewWorker(config *config.Parameters, ctx context.Context) {
 	data := historical{
-		// Fan tachymeters
-		"revs": {}, // momentary revs/sec
-		"rpm":  {}, // rpm history by minute
-
 		// CPU Temperature in milliCentigrades
 		"t":    {}, // momentary temp
 		"temp": {}, // temp history by minute
@@ -155,6 +151,12 @@ func (w *Worker) controlFan(ctx context.Context) {
 }
 
 func (w *Worker) startTach(ctx context.Context) {
+	if w.config.Fan.TachPin == "" {
+		log.Println("[DEBUG] No tachymeter configured")
+		return
+	}
+	w.data["revs"] = []int{}
+	w.data["rpm"] = []int{}
 	var tach gpio.PinIn = gpioreg.ByName(w.config.Fan.TachPin)
 	if tach == nil {
 		log.Fatalf("Failed to find %s", w.config.Fan.TachPin)
@@ -306,7 +308,9 @@ func (w *Worker) logEveryMinute(ctx context.Context) {
 		}
 
 		w.mx.Lock()
-		w.data["rpm"] = append(w.data["rpm"], avg(w.data["revs"]))
+		if w.config.Fan.TachPin != "" {
+			w.data["rpm"] = append(w.data["rpm"], avg(w.data["revs"]))
+		}
 		w.data["revs"] = []int{}
 		w.data["temp"] = append(w.data["temp"], avg(w.data["t"][max(0, len(w.data["t"])-60):len(w.data["t"])-1]))
 
