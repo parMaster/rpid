@@ -949,11 +949,23 @@ async function loadChart() {
 
 	// check if there is object with name "Modules" and if it has "system" key
 	if (data["Modules"] && data["Modules"]["system"] && data["Modules"]["system"]["LoadAvg"]) {
-		var LoadAvg = {
+		var LoadAvg1m = {
 			x: data["Dates"],
 			y: data["Modules"]["system"]["LoadAvg"]["1m"],
 			type: 'scatter',
-			name: 'CPU load'
+			name: 'CPU LA 1m'
+		};
+		var LoadAvg5m = {
+			x: data["Dates"],
+			y: data["Modules"]["system"]["LoadAvg"]["5m"],
+			type: 'scatter',
+			name: 'CPU LA 5m'
+		};
+		var LoadAvg15m = {
+			x: data["Dates"],
+			y: data["Modules"]["system"]["LoadAvg"]["15m"],
+			type: 'scatter',
+			name: 'CPU LA 15m'
 		};
 		var LoadAvgLayout = {
 			title: "CPU load", 
@@ -961,7 +973,7 @@ async function loadChart() {
 			height: 250,
 			template: template
 		};
-		Plotly.newPlot('LoadAvg', [LoadAvg], LoadAvgLayout);
+		Plotly.newPlot('LoadAvg', [LoadAvg1m, LoadAvg5m, LoadAvg15m], LoadAvgLayout);
 	}
 
 	// check if there is object with name "Modules" and if it has "system" key

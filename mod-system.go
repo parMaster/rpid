@@ -65,6 +65,8 @@ func (r *SystemReporter) Collect() error {
 		log.Printf("[ERROR] failed to get load avg: %v", err)
 	} else {
 		r.data.LoadAvg["1m"] = append(r.data.LoadAvg["1m"], la["1m"])
+		r.data.LoadAvg["5m"] = append(r.data.LoadAvg["5m"], la["5m"])
+		r.data.LoadAvg["15m"] = append(r.data.LoadAvg["15m"], la["15m"])
 	}
 	return nil
 }
