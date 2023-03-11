@@ -15,5 +15,8 @@
 .DS_Store
 ._.DS_Store
 
+# binaries
+dist/*
+
 # Dependency directories (remove the comment below to include it)
 # vendor/
