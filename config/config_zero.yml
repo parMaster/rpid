@@ -1,0 +1,10 @@
+server:
+  listen: :8095
+fan:
+  controlPin: GPIO18
+  high: 45
+  low: 40
+modules:
+  i2c: 1
+  system:
+    enabled: true
