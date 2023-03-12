@@ -50,7 +50,7 @@ func (r *Bmp280Reporter) Collect() error {
 		return err
 	}
 	pressurePa := ShortFloat(r.bmp280Data.Pressure / physic.Pascal)
-	tempMilliC := ShortFloat(r.bmp280Data.Temperature-physic.ZeroCelsius) / 1000000
+	tempMilliC := ShortFloat(r.bmp280Data.Temperature-physic.ZeroCelsius) / 1000000000
 
 	r.mx.Lock()
 	r.data["pressure"] = append(r.data["pressure"], pressurePa/100)

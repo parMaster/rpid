@@ -906,7 +906,7 @@ async function loadChart() {
 			x: data["Dates"],
 			y: data["Modules"]["bmp280"]["temp"],
 			type: 'scatter',
-			name: 'Ambient temp, m˚C'
+			name: 'Ambient temp, ˚C'
 		};
 		var rh_m = {
 			x: data["Dates"],
@@ -918,7 +918,7 @@ async function loadChart() {
 
 		var AmbRHLayout = {
 			yaxis: {
-				title: 'Ambient temp, m˚C',
+				title: 'Ambient temp, ˚C',
 				gridcolor: 'rgba(99, 110, 250, 0.2)'
 			},
 			yaxis2: {
