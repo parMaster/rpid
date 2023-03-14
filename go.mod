@@ -5,6 +5,7 @@ go 1.18
 require (
 	github.com/go-chi/chi/v5 v5.0.8
 	github.com/go-pkgz/lgr v0.10.4
+	github.com/go-pkgz/rest v1.17.0
 	github.com/parMaster/htu21 v0.0.0-20230220190438-31e4538dc67a
 	github.com/stretchr/testify v1.8.2
 	github.com/umputun/go-flags v1.5.1

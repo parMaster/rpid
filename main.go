@@ -15,6 +15,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-pkgz/lgr"
+	"github.com/go-pkgz/rest"
 	"github.com/parMaster/rpid/config"
 	flags "github.com/umputun/go-flags"
 	"periph.io/x/conn/v3/gpio"
@@ -206,6 +207,8 @@ func (w *Worker) startServer(ctx context.Context) {
 
 func (w *Worker) router() http.Handler {
 	router := chi.NewRouter()
+
+	router.Use(rest.Throttle(5))
 
 	router.Get("/status", func(rw http.ResponseWriter, r *http.Request) {
 		w.mx.Lock()
