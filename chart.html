@@ -13,7 +13,6 @@
 </head>
 
 <body>
-	This is chart.html, remove this label from chart.go, fix url before deploy
 	<div id='TempRpmChart'><!-- Plotly chart will be drawn inside this DIV --></div>
 	<div id='LoadAvg'><!-- Plotly chart will be drawn inside this DIV --></div>
 	<div id='TimeInState'><!-- Plotly chart will be drawn inside this DIV --></div>
@@ -22,7 +21,7 @@
 
 <script>
 async function getData() {
-    let url = 'http://pizero.local:8095/fullData';
+    let url = '/fullData';
     try {
         let resp = await fetch(url);
         return await resp.json();

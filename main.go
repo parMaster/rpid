@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -24,6 +25,9 @@ import (
 	"periph.io/x/conn/v3/i2c/i2creg"
 	"periph.io/x/host/v3"
 )
+
+//go:embed chart.html
+var chart_html string
 
 type historical map[string][]int
 
@@ -91,6 +95,10 @@ func (w *Worker) setFanState(fanControl gpio.PinIO, state bool) error {
 }
 
 func (w *Worker) controlFan(ctx context.Context) {
+	if w.config.Fan.ControlPin == "" {
+		log.Println("[DEBUG] No fan ControlPin defined, skipping fan control")
+		return
+	}
 	fanControl := gpioreg.ByName(w.config.Fan.ControlPin)
 	if fanControl == nil {
 		log.Printf("[ERROR] Failed to find %s", fanControl)
