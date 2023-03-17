@@ -36,7 +36,7 @@ type Worker struct {
 	mx      sync.Mutex
 }
 
-func StartNewWorker(config *config.Parameters, ctx context.Context) {
+func NewWorker(config *config.Parameters, ctx context.Context) {
 	data := historical{
 		// CPU Temperature in milliCentigrades
 		"t":    {}, // momentary temp
@@ -451,5 +451,5 @@ func main() {
 		cancel()
 	}()
 
-	StartNewWorker(conf, ctx)
+	NewWorker(conf, ctx)
 }
