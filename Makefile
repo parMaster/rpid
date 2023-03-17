@@ -4,7 +4,7 @@ GITREV=$(shell git describe --abbrev=7 --always --tags)
 REV=$(GITREV)-$(BRANCH)-$(shell date +%Y%m%d-%H:%M:%S)
 
 build: 
-	go build -o dist/rpid -v -mod=vendor
+	go build -o dist/rpid -v
 
 info:
 	- @echo "revision $(REV)"
