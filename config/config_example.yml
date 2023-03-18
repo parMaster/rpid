@@ -1,0 +1,17 @@
+server:
+  listen: :8095
+fan:
+  tachPin: GPIO15 # GPIO15 is the default pin for the fan tachymeter. Optional
+  controlPin: GPIO18 # GPIO18 is the default pin for the fan control. Optional
+  high: 45 # Temperature at which the fan will be activated
+  low: 40 # Temperature at which the fan will be deactivated
+modules:
+  i2c: 4 # I2C bus number
+  # bmp280: # BMP280 sensor. Optional
+  #   enabled: true
+  #   addr: 0x76
+  # htu21: # HTU21 sensor. Optional
+  #   enabled: true
+  #   addr: 0x40
+  system:
+    enabled: true

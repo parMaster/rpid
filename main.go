@@ -406,7 +406,7 @@ func avg(slice []int) int {
 }
 
 type Options struct {
-	Config string `long:"config" env:"CONFIG" default:"config/config.yml" description:"yaml config file name"`
+	Config string `long:"config" env:"CONFIG" default:"config.yml" description:"yaml config file name"`
 	Dbg    bool   `long:"dbg" env:"DEBUG" description:"show debug info"`
 }
 

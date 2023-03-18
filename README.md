@@ -1,7 +1,7 @@
 # RPId
 [![Go](https://github.com/parMaster/rpid/actions/workflows/go.yml/badge.svg)](https://github.com/parMaster/rpid/actions/workflows/go.yml)
 
-Raspberry Pi temperature (fan) control systemd service. [Frontend with nice charts](https://pi4.cdns.com.ua/charts) and [endpoint](https://pi4.cdns.com.ua/status)s for monitoring services, logging CPU temps, fan RPM, system info (1m load average, cpu time in frequencies), environmental data (Ambient temperature, Relative humidity, Atmospheric pressure) from external sensors connected to Raspberry Pi GPIO.
+Raspberry Pi temperature (fan) control systemd service. [Frontend with nice charts](https://pi4.cdns.com.ua/charts) and [endpoint](https://pi4.cdns.com.ua/status)s for monitoring services, logging CPU temps, fan RPM, system info (load averages, cpu time in frequencies). Additional modules available to collect environmental data (Ambient temperature, Relative humidity, Atmospheric pressure) from external sensors connected to Raspberry Pi GPIO.
 
 # Setup
 - pi user must be added to the same group as /dev/gpiomem in ([source](https://raspberrypi.stackexchange.com/questions/40105/access-gpio-pins-without-root-no-access-to-dev-mem-try-running-as-root)).
