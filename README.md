@@ -8,6 +8,7 @@ Raspberry Pi temperature (fan) control systemd service. [Frontend with nice char
 - i2c interface should be enabled using `Interface Options` menu in `raspi-config`. Installing `i2c-tools` could be beneficial as well, to run `i2cdetect -y` for example.
 - systemd service is supposed to be easily deployable by `make deploy`
 - config/config.yml obviously must be changed, accordingly to the specific GPIO configuration - modules can be disabled or even sections deleted.
+- for step-by-step installation instructions, see [dist/README.md](https://github.com/parMaster/rpid/blob/main/dist/README.md)
 
 # Real life usage example. Just Why?
 Dashboard with the most recent revision is publicly available [HERE](https://pi4.cdns.com.ua/charts). It could be down if there is a blackout caused by another russian missile strike on ukrainian power grid.
