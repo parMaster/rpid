@@ -3,9 +3,9 @@
 rpid can be installed as a systemd service. Before installation, you can run it in foreground mode to check if it works as expected.
 
 ## Prerequisites
-	- pi user must be added to the same group as /dev/gpiomem in ([source](https://raspberrypi.stackexchange.com/questions/40105/access-gpio-pins-without-root-no-access-to-dev-mem-try-running-as-root)).
-	- i2c interface should be enabled using `Interface Options` menu in `raspi-config`. Installing `i2c-tools` could be beneficial as well, to run `i2cdetect -y` for example.
-	- /var/log directory must be writable by the user under which the service will be running
+- pi user must be added to the same group as /dev/gpiomem in ([source](https://raspberrypi.stackexchange.com/questions/40105/access-gpio-pins-without-root-no-access-to-dev-mem-try-running-as-root)).
+- i2c interface should be enabled using `Interface Options` menu in `raspi-config`. Installing `i2c-tools` could be beneficial as well, to run `i2cdetect -y` for example.
+- /var/log directory must be writable by the user under which the service will be running
 
 ## Run in foreground
 
