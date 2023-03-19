@@ -9,27 +9,33 @@ rpid can be installed as a systemd service. Before installation, you can run it 
 
 ## Run in foreground
 
-	Download the latest release from https://github.com/parMaster/rpid/releases
+Download the latest release from https://github.com/parMaster/rpid/releases
+
 	$ tar -xvf rpid-<version>.tar.gz
 	$ cd rpid-<version>
-	edit config.yml according to your needs
-	edit rpid.service file, specify user under which the service will be running, default is: `User=pi`
-	then run:
-	$ ./rpid
+edit config.yml according to your needs
 
-	If you want to run it as a service, use this command to install it:
+edit rpid.service file, specify user under which the service will be running, default is: `User=pi` then run:
+
+	$ ./rpid
+	
+If you want to run it as a service, use this command to install it:
+	
 	$ make deploy
 
 ## Install from source
 
 	$ git clone https://github.com/parMaster/rpid.git
 	$ cd rpid
-	edit config/config.yml according to your needs
+	
+edit config/config.yml according to your needs
+
 	$ make deploy
 
 ## Install from binary
 
-	Download the latest release from https://github.com/parMaster/rpid/releases
+Download the latest release from https://github.com/parMaster/rpid/releases
+
 	$ tar -xvf rpid-<version>.tar.gz
 	$ cd rpid-<version>
 	$ make deploy
@@ -37,4 +43,5 @@ rpid can be installed as a systemd service. Before installation, you can run it 
 ## Uninstall
 
 	$ make remove
-	stops service and removes everything
+	
+stops service and removes everything
