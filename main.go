@@ -78,6 +78,7 @@ func NewWorker(config *config.Parameters, ctx context.Context) {
 	log.Printf("Temps cfg: low=%d˚C, high=%d˚C", w.config.Fan.Low, w.config.Fan.High)
 
 	<-ctx.Done()
+	w.saveData()                // dump data on exit
 	time.Sleep(2 * time.Second) // wait 2 secs till tach timeout (1 sec) hits
 	log.Println("[DEBUG] Closing I²C Bus on exit")
 	if err := w.i2cBus.Close(); err != nil {
@@ -231,35 +232,12 @@ func (w *Worker) router() http.Handler {
 	})
 
 	router.Get("/fullData", func(rw http.ResponseWriter, r *http.Request) {
-		w.mx.Lock()
 		rw.Header().Set("Content-Type", "application/json")
 		rw.Header().Set("Access-Control-Allow-Origin", "*")
 
-		var out struct {
-			Data    historical
-			Dates   []string
-			Modules map[string]interface{}
-		}
-
-		out.Data = w.data
-		out.Data["revs"] = []int{}
-		out.Dates = []string{}
-		now := time.Now()
-		for i := len(out.Data["temp"]); i > 0; i-- {
-			out.Dates = append(out.Dates, now.Add(-1*time.Minute*time.Duration(i)).Format("2006-01-02 15:04"))
-		}
-
-		out.Modules = make(map[string]interface{})
-		for _, m := range w.modules {
-			data, err := m.Report()
-			if err != nil {
-				log.Printf("[ERROR] %s: %v", m.Name(), err)
-			}
-			out.Modules[m.Name()] = data
-		}
+		out := w.getFullData()
 
 		json.NewEncoder(rw).Encode(out)
-		w.mx.Unlock()
 	})
 
 	router.Get("/charts", func(rw http.ResponseWriter, r *http.Request) {
@@ -273,6 +251,51 @@ func (w *Worker) router() http.Handler {
 	})
 
 	return router
+}
+
+func (w *Worker) getFullData() interface{} {
+	w.mx.Lock()
+	defer w.mx.Unlock()
+
+	var out struct {
+		Data    historical
+		Dates   []string
+		Modules map[string]interface{}
+	}
+
+	out.Data = w.data
+	out.Data["revs"] = []int{}
+	out.Dates = []string{}
+	now := time.Now()
+	for i := len(out.Data["temp"]); i > 0; i-- {
+		out.Dates = append(out.Dates, now.Add(-1*time.Minute*time.Duration(i)).Format("2006-01-02 15:04"))
+	}
+
+	out.Modules = make(map[string]interface{})
+	for _, m := range w.modules {
+		data, err := m.Report()
+		if err != nil {
+			log.Printf("[ERROR] %s: %v", m.Name(), err)
+		}
+		out.Modules[m.Name()] = data
+	}
+
+	return out
+}
+
+// json encode and write to file
+func (w *Worker) saveData() {
+	if b, err := json.Marshal(w.getFullData()); err == nil {
+		if _, err := os.Stat("data"); os.IsNotExist(err) {
+			os.Mkdir("data", 0755)
+		}
+		dt := time.Now().Format("2006-01-02_15-04-05")
+		if err := os.WriteFile("data/"+dt+".json", b, 0644); err != nil {
+			log.Printf("[ERROR] Can't save data: %e", err)
+		}
+	} else {
+		log.Printf("[ERROR] Can't encode data: %e", err)
+	}
 }
 
 func (w *Worker) logEverySecond(ctx context.Context) {
