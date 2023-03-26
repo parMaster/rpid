@@ -32,6 +32,7 @@ remove:
 
 release:
 	cp config/config_example.yml dist/config.yml
+	cp LICENSE dist/LICENSE
 	GOOS=linux GOARCH=arm64 go build -o dist/rpid
 	cp -r dist rpid-$(GITREV)-arm64
 	tar -czvf rpid-$(GITREV)-arm64.tar.gz rpid-$(GITREV)-arm64/*
