@@ -40,7 +40,7 @@ type Worker struct {
 	mx      sync.Mutex
 }
 
-func NewWorker(config *config.Parameters, ctx context.Context) {
+func NewWorker(config *config.Parameters) *Worker {
 	data := historical{
 		// CPU Temperature in milliCentigrades
 		"t":    {}, // momentary temp
@@ -52,6 +52,10 @@ func NewWorker(config *config.Parameters, ctx context.Context) {
 		data:   data,
 	}
 
+	return w
+}
+
+func (w *Worker) Run(ctx context.Context) error {
 	var err error
 
 	// Load peripheral drivers
@@ -61,7 +65,8 @@ func NewWorker(config *config.Parameters, ctx context.Context) {
 
 	w.i2cBus, err = i2creg.Open(w.config.Modules.I2C)
 	if err != nil {
-		log.Fatalf("[ERROR] failed to open I²C: %v", err)
+		log.Printf("[ERROR] failed to open I²C: %v", err)
+		return err
 	}
 
 	w.loadModules()
@@ -83,7 +88,9 @@ func NewWorker(config *config.Parameters, ctx context.Context) {
 	log.Println("[DEBUG] Closing I²C Bus on exit")
 	if err := w.i2cBus.Close(); err != nil {
 		log.Printf("[ERROR] Closing I²C: %e", err)
+		return err
 	}
+	return nil
 }
 
 func (w *Worker) setFanState(fanControl gpio.PinIO, state bool) error {
@@ -263,6 +270,7 @@ func (w *Worker) getFullData() interface{} {
 		Modules map[string]interface{}
 	}
 
+	// dates are not stored but generated on the fly
 	out.Data = w.data
 	out.Data["revs"] = []int{}
 	out.Dates = []string{}
@@ -482,5 +490,5 @@ func main() {
 		cancel()
 	}()
 
-	NewWorker(conf, ctx)
+	NewWorker(conf).Run(ctx)
 }
