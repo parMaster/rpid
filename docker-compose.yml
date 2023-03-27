@@ -8,9 +8,9 @@ services:
     ports:
       - "8095:8095"
     volumes:
-      - /sys/class/thermal/thermal_zone0:/sys/class/thermal/thermal_zone0:ro
       - /dev/gpiomem:/dev/gpiomem
       - /sys:/sys
+      - /sys/class/thermal/thermal_zone0:/sys/class/thermal/thermal_zone0:ro
       - /sys/devices/system/cpu/cpu0/cpufreq/stats:/sys/devices/system/cpu/cpu0/cpufreq/stats:ro
     devices:
       - /dev/i2c-4:/dev/i2c-4

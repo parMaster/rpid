@@ -85,7 +85,7 @@ func (r *SystemReporter) getCPUTimeInState(dbg bool) (map[string]int, error) {
 	)
 
 	if dbg {
-		data, err = os.ReadFile("cpu_time_in_state.txt")
+		data, err = os.ReadFile("data/cpu_time_in_state.txt")
 	} else { // https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-class-thermal
 		data, err = os.ReadFile("/sys/devices/system/cpu/cpu0/cpufreq/stats/time_in_state")
 	}
@@ -118,7 +118,7 @@ func (r *SystemReporter) getLoadAvg(dbg bool) (map[string]ShortFloat, error) {
 	)
 
 	if dbg {
-		data, err = os.ReadFile("cpu_loadavg.txt")
+		data, err = os.ReadFile("data/cpu_loadavg.txt")
 	} else {
 		data, err = os.ReadFile("/proc/loadavg")
 	}
