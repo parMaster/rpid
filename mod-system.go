@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -135,6 +136,7 @@ func (r *SystemReporter) getLoadAvg(dbg bool) (map[string]ShortFloat, error) {
 
 	for i, v := range []string{"1m", "5m", "15m"} {
 		fv, _ := strconv.ParseFloat(parts[i], 32)
+		fv = math.Round(fv*100) / 100 // leave only 2 decimals
 		out[v] = ShortFloat(fv)
 	}
 	return out, nil

@@ -43,14 +43,12 @@ func Test_SystemReporter(t *testing.T) {
 			"15m": {0.3},
 		}}
 
-	// assert.Contains(t, res, expected.TimeInState)
-	assert.Equal(t, expected.TimeInState, res)
+	assert.Equal(t, expected, res)
 }
 
 func Test_LoadConfig(t *testing.T) {
 
 	// Expected default config:
-	// &{Server:{Listen::8095 Dbg:false} Fan:{TachPin:GPIO15 ControlPin:GPIO18 High:45 Low:40} Modules:{BMP280:{Enabled:true Bmp280Addr:118} HTU21:{Enabled:true Htu21Addr:64} System:{Enabled:true} I2C:4}}
 	expected := config.Parameters{
 		Server: config.Server{
 			Listen: ":8095",
