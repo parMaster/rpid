@@ -23,7 +23,7 @@ func Test_SqliteStorage(t *testing.T) {
 
 	testRecord := storage.Data{
 		Module:   "testModule",
-		DateTime: "2019-01-01 00:00:00",
+		DateTime: "2019-01-01 00:00",
 		Topic:    "testTopic",
 		Value:    "testValue",
 	}
@@ -62,7 +62,7 @@ func Test_SqliteStorage(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Test if the date time is set to the current time if it is not set.
-	dt := time.Now().Format("2006-01-02 15:04:05")
+	dt := time.Now().Format("2006-01-02 15:04")
 	err = store.Write(ctx, storage.Data{Module: "testModule", Topic: "testTopic", Value: "testValue"})
 	assert.NoError(t, err)
 	savedValues, err := store.Read(ctx, "testModule")

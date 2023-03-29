@@ -47,7 +47,7 @@ func (s *SQLiteStorage) Write(ctx context.Context, d storage.Data) error {
 	}
 
 	if d.DateTime == "" {
-		d.DateTime = time.Now().Format("2006-01-02 15:04:05")
+		d.DateTime = time.Now().Format("2006-01-02 15:04")
 	}
 
 	if d.Topic == "" {
