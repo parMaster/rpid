@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"sync"
-	"time"
 
 	"github.com/parMaster/rpid/config"
 	"github.com/parMaster/rpid/storage"
@@ -67,7 +66,7 @@ func (r *Bmp280Reporter) Collect(ctx context.Context) error {
 	r.mx.Unlock()
 
 	if r.store != nil {
-		err := r.store.Write(ctx, storage.Data{Module: r.Name(), DateTime: time.Now().Format("2006-01-02 15:04:05"), Topic: "pressure", Value: fmt.Sprint(pressurePa / 100)})
+		err := r.store.Write(ctx, storage.Data{Module: r.Name(), Topic: "pressure", Value: fmt.Sprint(pressurePa / 100)})
 		if err != nil {
 			log.Printf("[ERROR] Bmp280Reporter: failed to write to storage: %v", err)
 		}

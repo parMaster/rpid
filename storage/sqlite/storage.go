@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/parMaster/rpid/storage"
@@ -43,6 +44,14 @@ func (s *SQLiteStorage) Write(ctx context.Context, d storage.Data) error {
 
 	if ok, err := s.moduleActive(ctx, d.Module); err != nil || !ok {
 		return err
+	}
+
+	if d.DateTime == "" {
+		d.DateTime = time.Now().Format("2006-01-02 15:04:05")
+	}
+
+	if d.Topic == "" {
+		return errors.New("topic is empty")
 	}
 
 	q := fmt.Sprintf("INSERT INTO `%s_data` VALUES ($1, $2, $3)", d.Module)

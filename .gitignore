@@ -10,6 +10,7 @@
 # test db
 *.db
 data/json
+config/config_dbg.yml
 
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out

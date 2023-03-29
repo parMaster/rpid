@@ -106,6 +106,11 @@ async function loadChart() {
 			template: template
 		}
 
+		Plotly.newPlot('AmbTempChart', [amb_temp, rh_m], AmbRHLayout);
+	}
+
+	// check if module bmp280 is loaded and has pressure data
+	if (data["Modules"] && data["Modules"]["bmp280"] && data["Modules"]["bmp280"]["pressure"]) {
 		var press = {
 			x: data["Dates"],
 			y: data["Modules"]["bmp280"]["pressure"],
@@ -117,7 +122,6 @@ async function loadChart() {
 			margin: {"t": 64, "b": 0, "l": 0, "r": 0},
 			template: template
 		};
-		Plotly.newPlot('AmbTempChart', [amb_temp, rh_m], AmbRHLayout);
 		Plotly.newPlot('PressureChart', [press], PressLayout);
 	}
 

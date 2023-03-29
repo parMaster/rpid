@@ -374,6 +374,11 @@ func (w *Worker) logEveryMinute(ctx context.Context) {
 		log.Printf("CPU: %d m˚C\r\n", last(w.data["temp"]))
 		log.Printf("Fan: %d rpm\r\n", last(w.data["rpm"]))
 
+		if w.store != nil {
+			w.store.Write(ctx, storage.Data{Module: "main", Topic: "temp", Value: fmt.Sprint(last(w.data["temp"]))})
+			w.store.Write(ctx, storage.Data{Module: "main", Topic: "rpm", Value: fmt.Sprint(last(w.data["rpm"]))})
+		}
+
 		for _, m := range w.modules {
 			err := m.Collect(ctx)
 			if err != nil {
