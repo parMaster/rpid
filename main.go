@@ -18,6 +18,8 @@ import (
 	"github.com/go-pkgz/lgr"
 	"github.com/go-pkgz/rest"
 	"github.com/parMaster/rpid/config"
+	"github.com/parMaster/rpid/storage"
+	"github.com/parMaster/rpid/storage/sqlite"
 	flags "github.com/umputun/go-flags"
 	"periph.io/x/conn/v3/gpio"
 	"periph.io/x/conn/v3/gpio/gpioreg"
@@ -38,6 +40,7 @@ type Worker struct {
 	i2cBus  i2c.BusCloser
 	modules Modules
 	mx      sync.Mutex
+	store   storage.Storer
 }
 
 func NewWorker(config *config.Parameters) *Worker {
@@ -57,6 +60,16 @@ func NewWorker(config *config.Parameters) *Worker {
 
 func (w *Worker) Run(ctx context.Context) error {
 	var err error
+
+	if w.config.Storage.Type == "sqlite" {
+		var err error
+		w.store, err = sqlite.NewStorage(w.config.Storage.Path)
+		if err != nil {
+			log.Printf("[ERROR] Failed to open SQLite storage: %e", err)
+		}
+	} else {
+		log.Printf("[ERROR] Storage type %s is not supported", w.config.Storage.Type)
+	}
 
 	// Load peripheral drivers
 	if _, err := host.Init(); err != nil {
@@ -81,9 +94,12 @@ func (w *Worker) Run(ctx context.Context) error {
 
 	log.Printf("Service started. Fan tach on %s, trigger on %s, listening to \"%s\"", w.config.Fan.TachPin, w.config.Fan.ControlPin, w.config.Server.Listen)
 	log.Printf("Temps cfg: low=%d˚C, high=%d˚C", w.config.Fan.Low, w.config.Fan.High)
+	if w.store != nil {
+		log.Printf("Storage: %s, %s", w.config.Storage.Type, w.config.Storage.Path)
+	}
 
 	<-ctx.Done()
-	w.saveData()                // dump data on exit
+	w.store.Close()
 	time.Sleep(2 * time.Second) // wait 2 secs till tach timeout (1 sec) hits
 	log.Println("[DEBUG] Closing I²C Bus on exit")
 	if err := w.i2cBus.Close(); err != nil {
@@ -291,21 +307,6 @@ func (w *Worker) getFullData() interface{} {
 	return out
 }
 
-// json encode and write to file
-func (w *Worker) saveData() {
-	if b, err := json.Marshal(w.getFullData()); err == nil {
-		if _, err := os.Stat("data"); os.IsNotExist(err) {
-			os.Mkdir("data", 0755)
-		}
-		dt := time.Now().Format("2006-01-02_15-04-05")
-		if err := os.WriteFile("data/"+dt+".json", b, 0644); err != nil {
-			log.Printf("[ERROR] Can't save data: %e", err)
-		}
-	} else {
-		log.Printf("[ERROR] Can't encode data: %e", err)
-	}
-}
-
 func (w *Worker) logEverySecond(ctx context.Context) {
 	ticker := time.NewTicker(1 * time.Second)
 	for {
@@ -365,7 +366,7 @@ func (w *Worker) logEveryMinute(ctx context.Context) {
 		log.Printf("Fan: %d rpm\r\n", last(w.data["rpm"]))
 
 		for _, m := range w.modules {
-			err := m.Collect()
+			err := m.Collect(ctx)
 			if err != nil {
 				log.Printf("[ERROR] %s: %v", m.Name(), err)
 			}
@@ -389,7 +390,7 @@ func (w *Worker) loadModules() (names []string) {
 	}
 
 	if w.config.Modules.BMP280.Enabled {
-		modbmp280, err := LoadBmp280Reporter(w.config.Modules.BMP280, w.i2cBus)
+		modbmp280, err := LoadBmp280Reporter(w.config.Modules.BMP280, w.i2cBus, w.store)
 		if err != nil {
 			log.Printf("%e", err)
 		} else {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -50,7 +51,7 @@ func (r *SystemReporter) Name() string {
 	return "system"
 }
 
-func (r *SystemReporter) Collect() error {
+func (r *SystemReporter) Collect(context.Context) error {
 	var err error
 	r.mx.Lock()
 	defer r.mx.Unlock()

@@ -1,5 +1,9 @@
 server:
   listen: :8095
+  dbg: false
+storage:
+  type: sqlite
+  path: /etc/rpid/data.db
 fan:
   tachPin: GPIO15
   controlPin: GPIO18

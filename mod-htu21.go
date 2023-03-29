@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"sync"
@@ -40,7 +41,7 @@ func (r *Htu21Reporter) Name() string {
 	return "htu21"
 }
 
-func (r *Htu21Reporter) Collect() error {
+func (r *Htu21Reporter) Collect(context.Context) error {
 	if err := r.htu21Device.Sense(&r.htu21Data); err != nil {
 		return err
 	}

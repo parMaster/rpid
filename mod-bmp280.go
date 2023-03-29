@@ -1,11 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/parMaster/rpid/config"
+	"github.com/parMaster/rpid/storage"
 	"periph.io/x/conn/v3/i2c"
 	"periph.io/x/conn/v3/physic"
 	"periph.io/x/devices/v3/bmxx80"
@@ -22,9 +25,10 @@ type Bmp280Reporter struct {
 	bmp280Device *bmxx80.Dev
 	i2cBus       i2c.BusCloser
 	mx           sync.Mutex
+	store        storage.Storer
 }
 
-func LoadBmp280Reporter(cfg config.BMP280, i2cBus i2c.BusCloser) (*Bmp280Reporter, error) {
+func LoadBmp280Reporter(cfg config.BMP280, i2cBus i2c.BusCloser, store storage.Storer) (*Bmp280Reporter, error) {
 	if !cfg.Enabled {
 		return nil, fmt.Errorf("Bmp280Reporter is not enabled")
 	}
@@ -38,14 +42,19 @@ func LoadBmp280Reporter(cfg config.BMP280, i2cBus i2c.BusCloser) (*Bmp280Reporte
 	if err != nil {
 		return nil, fmt.Errorf("[ERROR] failed to initialize bmp280: %w", err)
 	}
-	return &Bmp280Reporter{data: data, bmp280Device: bmp280Device, i2cBus: i2cBus, cfg: cfg}, nil
+	b := &Bmp280Reporter{data: data, bmp280Device: bmp280Device, i2cBus: i2cBus, cfg: cfg}
+	if store != nil {
+		log.Printf("[DEBUG] Bmp280Reporter: using storage (%T)", store)
+		b.store = store
+	}
+	return b, nil
 }
 
 func (r *Bmp280Reporter) Name() string {
 	return "bmp280"
 }
 
-func (r *Bmp280Reporter) Collect() error {
+func (r *Bmp280Reporter) Collect(ctx context.Context) error {
 	if err := r.bmp280Device.Sense(&r.bmp280Data); err != nil {
 		return err
 	}
@@ -57,6 +66,12 @@ func (r *Bmp280Reporter) Collect() error {
 	r.data["temp"] = append(r.data["temp"], tempMilliC)
 	r.mx.Unlock()
 
+	if r.store != nil {
+		err := r.store.Write(ctx, storage.Data{Module: r.Name(), DateTime: time.Now().Format("2006-01-02 15:04:05"), Topic: "pressure", Value: fmt.Sprint(pressurePa / 100)})
+		if err != nil {
+			log.Printf("[ERROR] Bmp280Reporter: failed to write to storage: %v", err)
+		}
+	}
 	log.Printf("BMP280: %8s | %s hPa \n", r.bmp280Data.Temperature, pressurePa)
 	return nil
 }

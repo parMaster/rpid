@@ -1,0 +1,102 @@
+package sqlite
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"os"
+
+	_ "github.com/mattn/go-sqlite3"
+	"github.com/parMaster/rpid/storage"
+)
+
+type SQLiteStorage struct {
+	DB            *sql.DB
+	activeModules map[string]bool
+}
+
+func NewStorage(path string) (*SQLiteStorage, error) {
+
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		file, err := os.Create(path)
+		if err != nil {
+			return nil, err
+		}
+		file.Close()
+	}
+
+	sqliteDatabase, err := sql.Open("sqlite3", path)
+	if err != nil {
+		return nil, err
+	}
+
+	return &SQLiteStorage{DB: sqliteDatabase, activeModules: make(map[string]bool)}, nil
+}
+
+func (s *SQLiteStorage) Write(ctx context.Context, d storage.Data) error {
+
+	if ok, err := s.moduleActive(ctx, d.Module); err != nil || !ok {
+		return err
+	}
+
+	q := fmt.Sprintf("INSERT INTO %s_data VALUES ($1, $2, $3)", d.Module)
+
+	_, err := s.DB.ExecContext(ctx, q, d.DateTime, d.Topic, d.Value)
+	return err
+}
+
+// Read read records for the given module from the database.
+func (s *SQLiteStorage) Read(ctx context.Context, module string) (data []storage.Data, err error) {
+
+	q := fmt.Sprintf("SELECT * FROM %s_data", module)
+	rows, err := s.DB.QueryContext(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		d := storage.Data{Module: module}
+		err = rows.Scan(&d.DateTime, &d.Topic, &d.Value)
+		if err != nil {
+			return nil, err
+		}
+		data = append(data, d)
+	}
+
+	return
+}
+
+// Check if the table exists
+func (s *SQLiteStorage) moduleActive(ctx context.Context, module string) (bool, error) {
+
+	if module == "" {
+		return false, errors.New("module name is empty")
+	}
+
+	if s.activeModules[module] {
+		return true, nil
+	}
+
+	if _, ok := s.activeModules[module]; !ok {
+		q := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s_data (DateTime TEXT, Topic TEXT, Value TEXT)", module)
+		_, err := s.DB.ExecContext(ctx, q)
+		if err != nil {
+			return false, err
+		}
+		s.activeModules[module] = true
+	}
+
+	return true, nil
+}
+
+func (s *SQLiteStorage) Cleanup(module string) {
+	q := fmt.Sprintf("DROP TABLE %s_data", module)
+	s.DB.Exec(q)
+	delete(s.activeModules, module)
+}
+
+func (s *SQLiteStorage) Close() {
+	s.DB.Close()
+}

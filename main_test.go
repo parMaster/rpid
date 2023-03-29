@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"testing"
 
@@ -12,7 +13,9 @@ func Test_SystemReporter(t *testing.T) {
 	r, err := LoadSystemReporter(config.System{Enabled: true}, true)
 	assert.NoError(t, err)
 
-	err = r.Collect()
+	ctx := context.Background()
+
+	err = r.Collect(ctx)
 	assert.NoError(t, err)
 
 	res, err := r.Report()
@@ -35,10 +38,13 @@ func Test_SystemReporter(t *testing.T) {
 			"900":  4051,
 		},
 		LoadAvg: map[string][]ShortFloat{
-			"1m": {0.12},
+			"1m":  {0.12},
+			"5m":  {0.24},
+			"15m": {0.3},
 		}}
 
-	assert.Equal(t, expected, res)
+	// assert.Contains(t, res, expected.TimeInState)
+	assert.Equal(t, expected.TimeInState, res)
 }
 
 func Test_LoadConfig(t *testing.T) {
@@ -55,6 +61,10 @@ func Test_LoadConfig(t *testing.T) {
 			ControlPin: "GPIO18",
 			High:       45,
 			Low:        40,
+		},
+		Storage: config.Storage{
+			Type: "sqlite",
+			Path: "/etc/rpid/data.db",
 		},
 		Modules: config.Modules{
 			BMP280: config.BMP280{

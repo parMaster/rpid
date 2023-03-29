@@ -1,8 +1,10 @@
 package main
 
+import "context"
+
 type CollectReporter interface {
 	Name() string
-	Collect() error
+	Collect(context.Context) error
 	Report() (interface{}, error)
 }
 

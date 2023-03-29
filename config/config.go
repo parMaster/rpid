@@ -12,17 +12,18 @@ import (
 type Parameters struct {
 	Server  Server  `yaml:"server"`
 	Fan     Fan     `yaml:"fan"`
-	Modules Modules `yaml:"modules,omitempty"`
+	Modules Modules `yaml:"modules"`
+	Storage Storage `yaml:"storage"`
 }
 
 type Modules struct {
-	BMP280 BMP280 `yaml:"bmp280,omitempty"`
-	HTU21  HTU21  `yaml:"htu21,omitempty"`
-	System System `yaml:"system,omitempty"`
+	BMP280 BMP280 `yaml:"bmp280"`
+	HTU21  HTU21  `yaml:"htu21"`
+	System System `yaml:"system"`
 	// to scan for i2c interfaces:
 	// $ i2cdetect -l
 	// i2c-4	i2c	400000002.i2c	I²C adapter
-	I2C string `yaml:"i2c,omitempty"`
+	I2C string `yaml:"i2c"`
 }
 
 type Fan struct {
@@ -38,6 +39,15 @@ type Fan struct {
 type Server struct {
 	Listen string `yaml:"listen"` // Address or/and Port for http server to listen to
 	Dbg    bool   `yaml:"-"`
+}
+
+type Storage struct {
+	// Type of storage to use
+	// Currently supported: sqlite, memory
+	Type string `yaml:"type"`
+	// Path to the database file
+	// Used only with sqlite storage
+	Path string `yaml:"path"`
 }
 
 // to find out address of the device, use i2cdetect with -y option with the bus number
