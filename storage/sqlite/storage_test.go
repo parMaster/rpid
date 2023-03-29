@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/parMaster/rpid/storage"
+	"github.com/parMaster/rpid/storage/model"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -21,7 +21,7 @@ func Test_SqliteStorage(t *testing.T) {
 		log.Printf("[ERROR] Failed to open SQLite storage: %e", err)
 	}
 
-	testRecord := storage.Data{
+	testRecord := model.Data{
 		Module:   "testModule",
 		DateTime: "2019-01-01 00:00",
 		Topic:    "testTopic",
@@ -54,16 +54,16 @@ func Test_SqliteStorage(t *testing.T) {
 	assert.Error(t, err)
 
 	// empty topic is not allowed
-	err = store.Write(ctx, storage.Data{Module: "testModule", Topic: "", Value: "testValue"})
+	err = store.Write(ctx, model.Data{Module: "testModule", Topic: "", Value: "testValue"})
 	assert.Error(t, err)
 
 	// empty value is allowed
-	err = store.Write(ctx, storage.Data{Module: "testModule", Topic: "testTopic", Value: ""})
+	err = store.Write(ctx, model.Data{Module: "testModule", Topic: "testTopic", Value: ""})
 	assert.NoError(t, err)
 
 	// Test if the date time is set to the current time if it is not set.
 	dt := time.Now().Format("2006-01-02 15:04")
-	err = store.Write(ctx, storage.Data{Module: "testModule", Topic: "testTopic", Value: "testValue"})
+	err = store.Write(ctx, model.Data{Module: "testModule", Topic: "testTopic", Value: "testValue"})
 	assert.NoError(t, err)
 	savedValues, err := store.Read(ctx, "testModule")
 	assert.NoError(t, err)

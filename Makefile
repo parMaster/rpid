@@ -3,8 +3,11 @@ BRANCH=$(subst /,-,$(B))
 GITREV=$(shell git describe --abbrev=7 --always --tags)
 REV=$(GITREV)-$(BRANCH)-$(shell date +%Y%m%d)
 
-build: 
+build:
 	go build -o dist/rpid -v
+
+test:
+	go test ./...
 
 info:
 	- @echo "revision $(REV)"
@@ -48,4 +51,4 @@ release:
 	rm dist/rpid
 	rm dist/config.yml
 
-.PHONY: build info deploy status remove release
+.PHONY: build info deploy status remove release test

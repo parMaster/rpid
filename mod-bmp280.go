@@ -8,6 +8,7 @@ import (
 
 	"github.com/parMaster/rpid/config"
 	"github.com/parMaster/rpid/storage"
+	"github.com/parMaster/rpid/storage/model"
 	"periph.io/x/conn/v3/i2c"
 	"periph.io/x/conn/v3/physic"
 	"periph.io/x/devices/v3/bmxx80"
@@ -66,7 +67,7 @@ func (r *Bmp280Reporter) Collect(ctx context.Context) error {
 	r.mx.Unlock()
 
 	if r.store != nil {
-		err := r.store.Write(ctx, storage.Data{Module: r.Name(), Topic: "pressure", Value: fmt.Sprint(pressurePa / 100)})
+		err := r.store.Write(ctx, model.Data{Module: r.Name(), Topic: "pressure", Value: fmt.Sprint(pressurePa / 100)})
 		if err != nil {
 			log.Printf("[ERROR] Bmp280Reporter: failed to write to storage: %v", err)
 		}

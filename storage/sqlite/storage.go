@@ -9,7 +9,7 @@ import (
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/parMaster/rpid/storage"
+	"github.com/parMaster/rpid/storage/model"
 )
 
 type SQLiteStorage struct {
@@ -40,7 +40,7 @@ func NewStorage(ctx context.Context, path string) (*SQLiteStorage, error) {
 	return &SQLiteStorage{DB: sqliteDatabase, activeModules: make(map[string]bool)}, nil
 }
 
-func (s *SQLiteStorage) Write(ctx context.Context, d storage.Data) error {
+func (s *SQLiteStorage) Write(ctx context.Context, d model.Data) error {
 
 	if ok, err := s.moduleActive(ctx, d.Module); err != nil || !ok {
 		return err
@@ -61,7 +61,7 @@ func (s *SQLiteStorage) Write(ctx context.Context, d storage.Data) error {
 }
 
 // Read reads records for the given module from the database
-func (s *SQLiteStorage) Read(ctx context.Context, module string) (data []storage.Data, err error) {
+func (s *SQLiteStorage) Read(ctx context.Context, module string) (data []model.Data, err error) {
 
 	q := fmt.Sprintf("SELECT * FROM `%s_data`", module)
 	rows, err := s.DB.QueryContext(ctx, q)
@@ -71,7 +71,7 @@ func (s *SQLiteStorage) Read(ctx context.Context, module string) (data []storage
 	defer rows.Close()
 
 	for rows.Next() {
-		d := storage.Data{Module: module}
+		d := model.Data{Module: module}
 		err = rows.Scan(&d.DateTime, &d.Topic, &d.Value)
 		if err != nil {
 			return nil, err

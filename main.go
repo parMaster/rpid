@@ -19,7 +19,7 @@ import (
 	"github.com/go-pkgz/rest"
 	"github.com/parMaster/rpid/config"
 	"github.com/parMaster/rpid/storage"
-	"github.com/parMaster/rpid/storage/sqlite"
+	"github.com/parMaster/rpid/storage/model"
 	flags "github.com/umputun/go-flags"
 	"periph.io/x/conn/v3/gpio"
 	"periph.io/x/conn/v3/gpio/gpioreg"
@@ -64,16 +64,8 @@ func NewWorker(config *config.Parameters) *Worker {
 func (w *Worker) Run(ctx context.Context) error {
 	var err error
 
-	switch w.config.Storage.Type {
-	case "sqlite":
-		w.store, err = sqlite.NewStorage(ctx, w.config.Storage.Path)
-		if err != nil {
-			log.Printf("[ERROR] Failed to open SQLite storage: %e", err)
-		}
-	case "":
-		log.Printf("[DEBUG] Storage is not configured")
-	default:
-		log.Printf("[ERROR] Storage type %s is not supported", w.config.Storage.Type)
+	if err = storage.Load(ctx, w.config.Storage, &w.store); w.config.Storage.Type != "" && err != nil {
+		log.Printf("[ERROR] failed to load storage: %v", err)
 	}
 
 	// Load peripheral drivers
@@ -375,8 +367,8 @@ func (w *Worker) logEveryMinute(ctx context.Context) {
 		log.Printf("Fan: %d rpm\r\n", last(w.data["rpm"]))
 
 		if w.store != nil {
-			w.store.Write(ctx, storage.Data{Module: "main", Topic: "temp", Value: fmt.Sprint(last(w.data["temp"]))})
-			w.store.Write(ctx, storage.Data{Module: "main", Topic: "rpm", Value: fmt.Sprint(last(w.data["rpm"]))})
+			w.store.Write(ctx, model.Data{Module: "main", Topic: "temp", Value: fmt.Sprint(last(w.data["temp"]))})
+			w.store.Write(ctx, model.Data{Module: "main", Topic: "rpm", Value: fmt.Sprint(last(w.data["rpm"]))})
 		}
 
 		for _, m := range w.modules {

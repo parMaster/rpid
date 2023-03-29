@@ -24,3 +24,8 @@ jobs:
       run: make build
       env:
         GOFLAGS: "-mod=vendor"
+
+    - name: Test
+      run: make test
+      env:
+        GOFLAGS: "-mod=vendor"
