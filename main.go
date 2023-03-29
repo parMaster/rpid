@@ -28,10 +28,10 @@ import (
 	"periph.io/x/host/v3"
 )
 
-//go:embed chart.html
+//go:embed web/chart.html
 var chart_html string
 
-//go:embed chart_tpl.js
+//go:embed web/chart_tpl.js
 var chart_tpl_js string
 
 type historical map[string][]int
@@ -66,11 +66,12 @@ func (w *Worker) Run(ctx context.Context) error {
 
 	switch w.config.Storage.Type {
 	case "sqlite":
-		s, err := sqlite.NewStorage(ctx, w.config.Storage.Path)
+		w.store, err = sqlite.NewStorage(ctx, w.config.Storage.Path)
 		if err != nil {
 			log.Printf("[ERROR] Failed to open SQLite storage: %e", err)
 		}
-		w.store = s
+	case "":
+		log.Printf("[DEBUG] Storage is not configured")
 	default:
 		log.Printf("[ERROR] Storage type %s is not supported", w.config.Storage.Type)
 	}
@@ -231,7 +232,6 @@ func (w *Worker) startServer(ctx context.Context) {
 
 	httpServer.ListenAndServe()
 
-	// Wait for termination signal
 	<-ctx.Done()
 	log.Printf("[INFO] Terminating http server")
 
@@ -272,9 +272,9 @@ func (w *Worker) router() http.Handler {
 			rw.Write([]byte(chart_html))
 		}
 	})
-	router.Get("/chart_tpl.js", func(rw http.ResponseWriter, r *http.Request) {
+	router.Get("/web/chart_tpl.js", func(rw http.ResponseWriter, r *http.Request) {
 		if w.config.Server.Dbg {
-			if b, err := os.ReadFile("chart_tpl.js"); err == nil {
+			if b, err := os.ReadFile("web/chart_tpl.js"); err == nil {
 				rw.Write([]byte(b))
 			}
 		} else {
