@@ -11,8 +11,11 @@ import (
 
 func Test_SqliteStorage(t *testing.T) {
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	var err error
-	store, err := NewStorage("/etc/rpid/data.db")
+	store, err := NewStorage(ctx, "test.db")
 	if err != nil {
 		log.Printf("[ERROR] Failed to open SQLite storage: %e", err)
 	}
@@ -23,8 +26,6 @@ func Test_SqliteStorage(t *testing.T) {
 		Topic:    "testTopic",
 		Value:    "testValue",
 	}
-
-	ctx := context.Background()
 
 	store.Cleanup(testRecord.Module)
 
@@ -43,5 +44,13 @@ func Test_SqliteStorage(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, data[1], testRecord)
 
-	store.Close()
+	notableRecord := storage.Data{
+		Module:   "notable",
+		DateTime: "2019-01-01 00:00:00",
+		Topic:    "testTopic",
+		Value:    "testValue",
+	}
+	data, err = store.Read(ctx, notableRecord.Module)
+	assert.Nil(t, data)
+	assert.Error(t, err)
 }

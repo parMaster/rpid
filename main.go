@@ -31,6 +31,9 @@ import (
 //go:embed chart.html
 var chart_html string
 
+//go:embed chart_tpl.js
+var chart_tpl_js string
+
 type historical map[string][]int
 
 type Worker struct {
@@ -61,13 +64,14 @@ func NewWorker(config *config.Parameters) *Worker {
 func (w *Worker) Run(ctx context.Context) error {
 	var err error
 
-	if w.config.Storage.Type == "sqlite" {
-		var err error
-		w.store, err = sqlite.NewStorage(w.config.Storage.Path)
+	switch w.config.Storage.Type {
+	case "sqlite":
+		s, err := sqlite.NewStorage(ctx, w.config.Storage.Path)
 		if err != nil {
 			log.Printf("[ERROR] Failed to open SQLite storage: %e", err)
 		}
-	} else {
+		w.store = s
+	default:
 		log.Printf("[ERROR] Storage type %s is not supported", w.config.Storage.Type)
 	}
 
@@ -99,7 +103,6 @@ func (w *Worker) Run(ctx context.Context) error {
 	}
 
 	<-ctx.Done()
-	w.store.Close()
 	time.Sleep(2 * time.Second) // wait 2 secs till tach timeout (1 sec) hits
 	log.Println("[DEBUG] Closing I²C Bus on exit")
 	if err := w.i2cBus.Close(); err != nil {
@@ -239,7 +242,6 @@ func (w *Worker) startServer(ctx context.Context) {
 
 func (w *Worker) router() http.Handler {
 	router := chi.NewRouter()
-
 	router.Use(rest.Throttle(5))
 
 	router.Get("/status", func(rw http.ResponseWriter, r *http.Request) {
@@ -257,9 +259,7 @@ func (w *Worker) router() http.Handler {
 	router.Get("/fullData", func(rw http.ResponseWriter, r *http.Request) {
 		rw.Header().Set("Content-Type", "application/json")
 		rw.Header().Set("Access-Control-Allow-Origin", "*")
-
 		out := w.getFullData()
-
 		json.NewEncoder(rw).Encode(out)
 	})
 
@@ -270,6 +270,15 @@ func (w *Worker) router() http.Handler {
 			}
 		} else {
 			rw.Write([]byte(chart_html))
+		}
+	})
+	router.Get("/chart_tpl.js", func(rw http.ResponseWriter, r *http.Request) {
+		if w.config.Server.Dbg {
+			if b, err := os.ReadFile("chart_tpl.js"); err == nil {
+				rw.Write([]byte(b))
+			}
+		} else {
+			rw.Write([]byte(chart_tpl_js))
 		}
 	})
 

@@ -16,7 +16,7 @@ type SQLiteStorage struct {
 	activeModules map[string]bool
 }
 
-func NewStorage(path string) (*SQLiteStorage, error) {
+func NewStorage(ctx context.Context, path string) (*SQLiteStorage, error) {
 
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		file, err := os.Create(path)
@@ -31,6 +31,11 @@ func NewStorage(path string) (*SQLiteStorage, error) {
 		return nil, err
 	}
 
+	go func() {
+		<-ctx.Done()
+		sqliteDatabase.Close()
+	}()
+
 	return &SQLiteStorage{DB: sqliteDatabase, activeModules: make(map[string]bool)}, nil
 }
 
@@ -40,16 +45,16 @@ func (s *SQLiteStorage) Write(ctx context.Context, d storage.Data) error {
 		return err
 	}
 
-	q := fmt.Sprintf("INSERT INTO %s_data VALUES ($1, $2, $3)", d.Module)
+	q := fmt.Sprintf("INSERT INTO `%s_data` VALUES ($1, $2, $3)", d.Module)
 
 	_, err := s.DB.ExecContext(ctx, q, d.DateTime, d.Topic, d.Value)
 	return err
 }
 
-// Read read records for the given module from the database.
+// Read reads records for the given module from the database
 func (s *SQLiteStorage) Read(ctx context.Context, module string) (data []storage.Data, err error) {
 
-	q := fmt.Sprintf("SELECT * FROM %s_data", module)
+	q := fmt.Sprintf("SELECT * FROM `%s_data`", module)
 	rows, err := s.DB.QueryContext(ctx, q)
 	if err != nil {
 		return nil, err
@@ -68,7 +73,7 @@ func (s *SQLiteStorage) Read(ctx context.Context, module string) (data []storage
 	return
 }
 
-// Check if the table exists
+// Check if the table exists, create if not. Cache the result in the map
 func (s *SQLiteStorage) moduleActive(ctx context.Context, module string) (bool, error) {
 
 	if module == "" {
@@ -80,7 +85,7 @@ func (s *SQLiteStorage) moduleActive(ctx context.Context, module string) (bool, 
 	}
 
 	if _, ok := s.activeModules[module]; !ok {
-		q := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s_data (DateTime TEXT, Topic TEXT, Value TEXT)", module)
+		q := fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s_data` (DateTime TEXT, Topic TEXT, Value TEXT)", module)
 		_, err := s.DB.ExecContext(ctx, q)
 		if err != nil {
 			return false, err
@@ -91,12 +96,9 @@ func (s *SQLiteStorage) moduleActive(ctx context.Context, module string) (bool, 
 	return true, nil
 }
 
+// Cleanup removes the table for the given module
 func (s *SQLiteStorage) Cleanup(module string) {
-	q := fmt.Sprintf("DROP TABLE %s_data", module)
+	q := fmt.Sprintf("DROP TABLE `%s_data`", module)
 	s.DB.Exec(q)
 	delete(s.activeModules, module)
-}
-
-func (s *SQLiteStorage) Close() {
-	s.DB.Close()
 }
