@@ -345,6 +345,7 @@ func (w *Worker) getFullData() interface{} {
 
 func (w *Worker) logEverySecond(ctx context.Context) {
 	ticker := time.NewTicker(1 * time.Second)
+	var temp int
 	for {
 		select {
 		case <-ctx.Done():
@@ -352,13 +353,12 @@ func (w *Worker) logEverySecond(ctx context.Context) {
 		case <-ticker.C:
 		}
 
-		var temp int
+		temp = 0
 		// Current temperature as reported by thermal zone (sensor), millidegree Celsius
 		// https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-class-thermal
 		sysTemp, err := os.ReadFile("/sys/class/thermal/thermal_zone0/temp")
 		if err != nil {
 			log.Printf("[ERROR] Can't read temperature file: %e", err)
-			temp = 0
 		} else {
 			temp, err = strconv.Atoi(string(sysTemp[0 : len(sysTemp)-1]))
 			if err != nil {
@@ -366,7 +366,9 @@ func (w *Worker) logEverySecond(ctx context.Context) {
 			}
 		}
 
-		log.Printf("[DEBUG] Temp: %d m˚C | Fan RPS/RPM: %d/%d\r\n", temp, w.revs, w.revs*60)
+		if w.config.Server.Dbg {
+			log.Printf("[DEBUG] Temp: %d m˚C | Fan RPS/RPM: %d/%d\r\n", temp, w.revs, w.revs*60)
+		}
 
 		w.mx.Lock()
 		w.data["revs"] = append(w.data["revs"], w.revs*60)
