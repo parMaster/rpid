@@ -31,6 +31,9 @@ import (
 //go:embed web/chart.html
 var chart_html string
 
+//go:embed web/view.html
+var view_html string
+
 //go:embed web/chart_tpl.js
 var chart_tpl_js string
 
@@ -44,6 +47,7 @@ type Worker struct {
 	modules Modules
 	mx      sync.Mutex
 	store   storage.Storer
+	ctx     context.Context
 }
 
 func NewWorker(config *config.Parameters) *Worker {
@@ -63,6 +67,7 @@ func NewWorker(config *config.Parameters) *Worker {
 
 func (w *Worker) Run(ctx context.Context) error {
 	var err error
+	w.ctx = ctx
 
 	if err = storage.Load(ctx, w.config.Storage, &w.store); w.config.Storage.Type != "" && err != nil {
 		log.Printf("[ERROR] failed to load storage: %v", err)
@@ -272,6 +277,36 @@ func (w *Worker) router() http.Handler {
 		} else {
 			rw.Write([]byte(chart_tpl_js))
 		}
+	})
+	router.Get("/view", func(rw http.ResponseWriter, r *http.Request) {
+		if w.config.Server.Dbg {
+			if b, err := os.ReadFile("view.html"); err == nil {
+				rw.Write([]byte(b))
+			}
+		} else {
+			rw.Write([]byte(view_html))
+		}
+	})
+
+	router.Get("/viewData/{module}", func(rw http.ResponseWriter, r *http.Request) {
+		if w.store == nil {
+			rw.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		module := chi.URLParam(r, "module")
+		if module == "" {
+			rw.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		rw.Header().Set("Content-Type", "application/json")
+		rw.Header().Set("Access-Control-Allow-Origin", "*")
+		out, err := w.store.View(w.ctx, module)
+		if err != nil {
+			log.Printf("[ERROR] Failed to get view: %v", err)
+			rw.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(rw).Encode(out)
 	})
 
 	return router

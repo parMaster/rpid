@@ -17,6 +17,8 @@ type Storer interface {
 	Read(context.Context, string) ([]model.Data, error)
 	// Write writes the data to the database.
 	Write(context.Context, model.Data) error
+	// View returns the data for the given module in the format that is suitable for the web view.
+	View(context.Context, string) (map[string]map[string]string, error)
 }
 
 func Load(ctx context.Context, cfg config.Storage, s *Storer) error {

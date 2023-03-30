@@ -79,3 +79,49 @@ func Test_SqliteStorage(t *testing.T) {
 	vn, _ := store.Read(ctx, "testModule")
 	assert.Equal(t, n, len(vn)-len(v))
 }
+
+func Test_SqliteStorage_View(t *testing.T) {
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var err error
+	store, err := NewStorage(ctx, "view.db")
+	if err != nil {
+		log.Printf("[ERROR] Failed to open SQLite storage: %e", err)
+	}
+
+	records := []model.Data{
+		{Module: "view", DateTime: "2022-03-30 00:00", Topic: "temp", Value: "36000"},
+		{Module: "view", DateTime: "2022-03-30 00:01", Topic: "temp", Value: "36100"},
+		{Module: "view", DateTime: "2022-03-30 00:02", Topic: "temp", Value: "36200"},
+		{Module: "view", DateTime: "2022-03-30 00:00", Topic: "rpm", Value: "100"},
+		{Module: "view", DateTime: "2022-03-30 00:01", Topic: "rpm", Value: "200"},
+		{Module: "view", DateTime: "2022-03-30 00:02", Topic: "rpm", Value: "300"},
+	}
+
+	for _, r := range records {
+		err = store.Write(ctx, r)
+		assert.NoError(t, err)
+	}
+
+	// test if the view is created
+
+	viewExpected := map[string]map[string]string{
+		"temp": {
+			"2022-03-30 00:00": "36000",
+			"2022-03-30 00:01": "36100",
+			"2022-03-30 00:02": "36200",
+		},
+		"rpm": {
+			"2022-03-30 00:00": "100",
+			"2022-03-30 00:01": "200",
+			"2022-03-30 00:02": "300",
+		},
+	}
+
+	view, err := store.View(ctx, "view") // create the view
+	assert.NoError(t, err)
+	assert.Equal(t, viewExpected, view)
+
+}

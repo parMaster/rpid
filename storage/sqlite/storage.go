@@ -54,7 +54,7 @@ func (s *SQLiteStorage) Write(ctx context.Context, d model.Data) error {
 		return errors.New("topic is empty")
 	}
 
-	q := fmt.Sprintf("INSERT INTO `%s_data` VALUES ($1, $2, $3)", d.Module)
+	q := fmt.Sprintf("INSERT INTO `%s` VALUES ($1, $2, $3)", d.Module)
 
 	_, err := s.DB.ExecContext(ctx, q, d.DateTime, d.Topic, d.Value)
 	return err
@@ -63,7 +63,7 @@ func (s *SQLiteStorage) Write(ctx context.Context, d model.Data) error {
 // Read reads records for the given module from the database
 func (s *SQLiteStorage) Read(ctx context.Context, module string) (data []model.Data, err error) {
 
-	q := fmt.Sprintf("SELECT * FROM `%s_data`", module)
+	q := fmt.Sprintf("SELECT * FROM `%s`", module)
 	rows, err := s.DB.QueryContext(ctx, q)
 	if err != nil {
 		return nil, err
@@ -82,6 +82,49 @@ func (s *SQLiteStorage) Read(ctx context.Context, module string) (data []model.D
 	return
 }
 
+// View returns a map of topics and their values for the given module
+// The map is sorted by DateTime and structured as follows:
+// map[Topic]map[DateTime]Value
+func (s *SQLiteStorage) View(ctx context.Context, module string) (data map[string]map[string]string, err error) {
+
+	data = make(map[string]map[string]string)
+
+	// select distinct topics from module
+	q := fmt.Sprintf("SELECT DISTINCT Topic FROM `%s`", module)
+	rows, err := s.DB.QueryContext(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var topic string
+		err = rows.Scan(&topic)
+		if err != nil {
+			return nil, err
+		}
+		data[topic] = make(map[string]string)
+	}
+
+	// select all records from module and fill the map
+	q = fmt.Sprintf("SELECT * FROM `%s` ORDER BY DateTime", module)
+	rows, err = s.DB.QueryContext(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+
+	for rows.Next() {
+		d := model.Data{Module: module}
+		err = rows.Scan(&d.DateTime, &d.Topic, &d.Value)
+		if err != nil {
+			return nil, err
+		}
+		data[d.Topic][d.DateTime] = d.Value
+	}
+
+	return
+}
+
 // Check if the table exists, create if not. Cache the result in the map
 func (s *SQLiteStorage) moduleActive(ctx context.Context, module string) (bool, error) {
 
@@ -94,7 +137,7 @@ func (s *SQLiteStorage) moduleActive(ctx context.Context, module string) (bool, 
 	}
 
 	if _, ok := s.activeModules[module]; !ok {
-		q := fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s_data` (DateTime TEXT, Topic TEXT, Value TEXT)", module)
+		q := fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s` (DateTime TEXT, Topic TEXT, Value TEXT)", module)
 		_, err := s.DB.ExecContext(ctx, q)
 		if err != nil {
 			return false, err
@@ -107,7 +150,7 @@ func (s *SQLiteStorage) moduleActive(ctx context.Context, module string) (bool, 
 
 // Cleanup removes the table for the given module
 func (s *SQLiteStorage) Cleanup(module string) {
-	q := fmt.Sprintf("DROP TABLE `%s_data`", module)
+	q := fmt.Sprintf("DROP TABLE `%s`", module)
 	s.DB.Exec(q)
 	delete(s.activeModules, module)
 }
