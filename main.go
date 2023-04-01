@@ -34,8 +34,8 @@ var chart_html string
 //go:embed web/view.html
 var view_html string
 
-//go:embed web/chart_tpl.js
-var chart_tpl_js string
+//go:embed web/chart_tpl.min.js
+var chart_tpl_min_js string
 
 type historical map[string][]int
 
@@ -269,13 +269,13 @@ func (w *Worker) router() http.Handler {
 			rw.Write([]byte(chart_html))
 		}
 	})
-	router.Get("/web/chart_tpl.js", func(rw http.ResponseWriter, r *http.Request) {
+	router.Get("/web/chart_tpl.min.js", func(rw http.ResponseWriter, r *http.Request) {
 		if w.config.Server.Dbg {
-			if b, err := os.ReadFile("web/chart_tpl.js"); err == nil {
+			if b, err := os.ReadFile("web/chart_tpl.min.js"); err == nil {
 				rw.Write([]byte(b))
 			}
 		} else {
-			rw.Write([]byte(chart_tpl_js))
+			rw.Write([]byte(chart_tpl_min_js))
 		}
 	})
 	router.Get("/view", func(rw http.ResponseWriter, r *http.Request) {

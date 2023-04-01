@@ -4,7 +4,7 @@
 	<!-- Doc: https://plotly.com/javascript/line-charts/pi -->
 	<!-- Dark theme derived from: https://jsfiddle.net/3hfq7ast/ -->
 	<!-- Load plotly.js into the DOM -->
-	<script src='https://cdn.plot.ly/plotly-2.18.2.min.js'></script>
+	<script src='https://cdn.plot.ly/plotly-2.20.0.min.js'></script>
 	<style>
 		body {
 			background-color: rgb(17,17,17) !important;
@@ -16,8 +16,11 @@
 	<div id='main'><!-- Plotly chart will be drawn inside this DIV --></div>
 	<div id='bmp280'><!-- Plotly chart will be drawn inside this DIV --></div>
 
-<script src="/web/chart_tpl.js"></script>
+<script src="/web/chart_tpl.min.js" type="text/javascript"></script>
 <script>
+
+let template = templateDark;
+
 async function getData(module) {
     let url = '/viewData/'+module;
     try {

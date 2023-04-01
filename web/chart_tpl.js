@@ -1,4 +1,4 @@
-const template = {
+const templateDark = {
 	"data": {
 		"barpolar": [
 			{

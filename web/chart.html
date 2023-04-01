@@ -19,7 +19,7 @@
 	<div id='AmbTempChart'><!-- Plotly chart will be drawn inside this DIV --></div>
 	<div id='PressureChart'><!-- Plotly chart will be drawn inside this DIV --></div>
 
-<script src="/web/chart_tpl.js"></script>
+<script src="/web/chart_tpl.min.js" type="text/javascript"></script>
 <script>
 async function getData() {
     let url = '/fullData';
@@ -32,6 +32,7 @@ async function getData() {
 }
 
 async function loadChart() {
+	let template = templateDark;
 	let data = await getData();
 
 	var temp = {

@@ -4,6 +4,7 @@ GITREV=$(shell git describe --abbrev=7 --always --tags)
 REV=$(GITREV)-$(BRANCH)-$(shell date +%Y%m%d)
 
 build:
+	curl -X POST -s --data-urlencode "input=$$(cat web/chart_tpl.js)" -o web/chart_tpl.min.js https://www.toptal.com/developers/javascript-minifier/api/raw
 	go build -o dist/rpid -v
 
 test:
