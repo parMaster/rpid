@@ -25,7 +25,7 @@ func Load(ctx context.Context, cfg config.Storage, s *Storer) error {
 	var err error
 	switch cfg.Type {
 	case "sqlite":
-		*s, err = sqlite.NewStorage(ctx, cfg.Path)
+		*s, err = sqlite.NewStorage(ctx, cfg.Path, cfg.ReadOnly)
 		if err != nil {
 			return fmt.Errorf("failed to init SQLite storage: %e", err)
 		}

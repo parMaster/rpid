@@ -48,6 +48,8 @@ type Storage struct {
 	// Path to the database file
 	// Used only with sqlite storage
 	Path string `yaml:"path"`
+	// ReadOnly mode - no writes to the database, no tables creation
+	ReadOnly bool `yaml:"readOnly"`
 }
 
 // to find out address of the device, use i2cdetect with -y option with the bus number

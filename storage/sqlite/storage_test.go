@@ -16,7 +16,7 @@ func Test_SqliteStorage(t *testing.T) {
 	defer cancel()
 
 	var err error
-	store, err := NewStorage(ctx, "test.db")
+	store, err := NewStorage(ctx, "test.db", false)
 	if err != nil {
 		log.Printf("[ERROR] Failed to open SQLite storage: %e", err)
 	}
@@ -86,7 +86,7 @@ func Test_SqliteStorage_View(t *testing.T) {
 	defer cancel()
 
 	var err error
-	store, err := NewStorage(ctx, "view.db")
+	store, err := NewStorage(ctx, "view.db", false)
 	if err != nil {
 		log.Printf("[ERROR] Failed to open SQLite storage: %e", err)
 	}
@@ -123,5 +123,26 @@ func Test_SqliteStorage_View(t *testing.T) {
 	view, err := store.View(ctx, "view") // create the view
 	assert.NoError(t, err)
 	assert.Equal(t, viewExpected, view)
+
+}
+
+func Test_SqliteStorage_readOnly(t *testing.T) {
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var err error
+	store, err := NewStorage(ctx, "test.db", true)
+	if err != nil {
+		log.Printf("[ERROR] Failed to open SQLite storage: %e", err)
+	}
+
+	err = store.Write(ctx, model.Data{Module: "testModule", Topic: "testTopic", Value: "testValue"})
+	assert.Error(t, err)
+	assert.Equal(t, "storage is read-only", err.Error())
+
+	_, err = NewStorage(ctx, "test_notcreated.db", true)
+	assert.Error(t, err)
+	assert.Equal(t, "storage does not exist and is read-only", err.Error())
 
 }
