@@ -53,3 +53,5 @@ release:
 	rm dist/config.yml
 
 .PHONY: build info deploy status remove release test
+
+.DEFAULT_GOAL : build
