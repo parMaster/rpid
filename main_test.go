@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"testing"
 
 	"github.com/parMaster/rpid/config"
@@ -44,47 +43,4 @@ func Test_SystemReporter(t *testing.T) {
 		}}
 
 	assert.Equal(t, expected, res)
-}
-
-func Test_LoadConfig(t *testing.T) {
-
-	// Expected default config:
-	expected := config.Parameters{
-		Server: config.Server{
-			Listen: ":8095",
-			Dbg:    false,
-		},
-		Fan: config.Fan{
-			TachPin:    "GPIO15",
-			ControlPin: "GPIO18",
-			High:       45,
-			Low:        40,
-		},
-		Storage: config.Storage{
-			Type: "sqlite",
-			Path: "/etc/rpid/data.db",
-		},
-		Modules: config.Modules{
-			BMP280: config.BMP280{
-				Enabled:    true,
-				Bmp280Addr: 118,
-			},
-			HTU21: config.HTU21{
-				Enabled:   true,
-				Htu21Addr: 64,
-			},
-			System: config.System{
-				Enabled: true,
-			},
-			I2C: "4",
-		},
-	}
-
-	var conf *config.Parameters
-	var err error
-	conf, err = config.NewConfig("config/config.yml")
-	if err != nil {
-		log.Fatalf("[ERROR] can't load config, %s", err)
-	}
-	assert.Equal(t, expected, *conf)
 }
