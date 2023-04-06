@@ -3,7 +3,7 @@ server:
   dbg: false
 storage:
   type: sqlite
-  path: /etc/rpid/data.db
+  path: file:/etc/rpid/data.db?mode=rwc&_journal_mode=WAL
   readOnly: false
 fan:
   tachPin: GPIO15

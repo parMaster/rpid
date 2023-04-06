@@ -1,9 +1,12 @@
 deploy:
-	- sudo systemctl stop rpid.service || true
-	sudo cp rpid /usr/bin/
-	sudo cp rpid.service /etc/systemd/system/
+	sudo systemctl stop rpid.service || true
+	sudo cp dist/rpid /usr/bin/
+	sudo cp dist/rpid.service /etc/systemd/system/
 	sudo mkdir -p /etc/rpid
-	sudo cp config.yml /etc/rpid/
+	sudo chown pi:pi /etc/rpid
+	cp config/config.yml /etc/rpid/
+	touch /etc/rpid/data.db
+	chmod 0755 /etc/rpid/data.db
 	sudo systemctl daemon-reload
 	sudo systemctl enable rpid.service
 	sudo systemctl start rpid.service
