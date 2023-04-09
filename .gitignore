@@ -24,5 +24,6 @@ config/config_dbg.yml
 
 # build files
 dist/rpid
+rpid
 web/chart_tpl.min.js
 

@@ -4,7 +4,7 @@
 	<!-- Doc: https://plotly.com/javascript/line-charts/pi -->
 	<!-- Dark theme derived from: https://jsfiddle.net/3hfq7ast/ -->
 	<!-- Load plotly.js into the DOM -->
-	<script src='https://cdn.plot.ly/plotly-2.18.2.min.js'></script>
+	<script src='https://cdn.plot.ly/plotly-2.20.0.min.js'></script>
 	<style>
 		body {
 			background-color: rgb(17,17,17) !important;
@@ -30,6 +30,9 @@ async function getData() {
         console.log(error);
     }
 }
+
+var tempDiv = document.getElementById('TempRpmChart');
+var loadDiv = document.getElementById('LoadAvg');
 
 async function loadChart() {
 	let template = templateDark;
@@ -71,7 +74,48 @@ async function loadChart() {
 		}
 		plots.push(rpm);
 	}
-	Plotly.newPlot('TempRpmChart', plots, TempRPMLayout);
+	Plotly.newPlot(tempDiv, plots, TempRPMLayout);
+
+	// LoadAvg chart configuration
+	if (data["Modules"] && data["Modules"]["system"] && data["Modules"]["system"]["LoadAvg"]) {
+		var LoadAvg1m = {
+			x: data["Dates"],
+			y: data["Modules"]["system"]["LoadAvg"]["1m"],
+			type: 'scatter',
+			name: 'CPU LA 1m',
+			yaxis: 'y',
+		};
+		var LoadAvg5m = {
+			x: data["Dates"],
+			y: data["Modules"]["system"]["LoadAvg"]["5m"],
+			type: 'scatter',
+			name: 'CPU LA 5m',
+			yaxis: 'y2',
+		};
+		var LoadAvg15m = {
+			x: data["Dates"],
+			y: data["Modules"]["system"]["LoadAvg"]["15m"],
+			type: 'scatter',
+			name: 'CPU LA 15m',
+			yaxis: 'y2',
+		};
+		var LoadAvgLayout = {
+			title: "CPU load",
+			margin: {"t": 32, "b": 0, "l": 48, "r": 128},
+			height: 250,
+			template: template,
+			// added yaxis2 just because temp-rpm chart has it, so relayout event will work
+			yaxis2:{
+				title: '',
+				overlaying: 'y',
+				side: 'right',
+				showgrid: false,
+				showticklabels: false,
+				visible: false
+			}
+		};
+		Plotly.newPlot(loadDiv, [LoadAvg1m, LoadAvg5m, LoadAvg15m], LoadAvgLayout);
+	}
 
 	// check if there is object with name "Modules" and if it has "bmp280" and "htu21" keys
 	if (data["Modules"] && data["Modules"]["bmp280"] && data["Modules"]["htu21"]
@@ -127,35 +171,6 @@ async function loadChart() {
 	}
 
 	// check if there is object with name "Modules" and if it has "system" key
-	if (data["Modules"] && data["Modules"]["system"] && data["Modules"]["system"]["LoadAvg"]) {
-		var LoadAvg1m = {
-			x: data["Dates"],
-			y: data["Modules"]["system"]["LoadAvg"]["1m"],
-			type: 'scatter',
-			name: 'CPU LA 1m'
-		};
-		var LoadAvg5m = {
-			x: data["Dates"],
-			y: data["Modules"]["system"]["LoadAvg"]["5m"],
-			type: 'scatter',
-			name: 'CPU LA 5m'
-		};
-		var LoadAvg15m = {
-			x: data["Dates"],
-			y: data["Modules"]["system"]["LoadAvg"]["15m"],
-			type: 'scatter',
-			name: 'CPU LA 15m'
-		};
-		var LoadAvgLayout = {
-			title: "CPU load", 
-			margin: {"t": 32, "b": 0, "l": 48, "r": 128},
-			height: 250,
-			template: template
-		};
-		Plotly.newPlot('LoadAvg', [LoadAvg1m, LoadAvg5m, LoadAvg15m], LoadAvgLayout);
-	}
-
-	// check if there is object with name "Modules" and if it has "system" key
 	if (data["Modules"] && data["Modules"]["system"] && data["Modules"]["system"]["TimeInState"]) {
 		var TimeInState = {
 			type:"pie",
@@ -175,6 +190,12 @@ async function loadChart() {
 		}
 		Plotly.newPlot('TimeInState', [TimeInState], TISlayout);
 	}
+
+	tempDiv.on('plotly_relayout', function(eventdata){
+		Plotly.relayout(loadDiv, eventdata);
+		Plotly.relayout('AmbTempChart', eventdata);
+	});
+
 }
 
 var interval = setInterval(loadChart, 60000);

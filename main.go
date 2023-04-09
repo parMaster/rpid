@@ -270,6 +270,7 @@ func (w *Worker) router() http.Handler {
 		}
 	})
 	router.Get("/web/chart_tpl.min.js", func(rw http.ResponseWriter, r *http.Request) {
+		rw.Header().Set("Content-Type", "application/javascript")
 		if w.config.Server.Dbg {
 			if b, err := os.ReadFile("web/chart_tpl.min.js"); err == nil {
 				rw.Write([]byte(b))
