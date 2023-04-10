@@ -823,3 +823,5 @@ const templateDark = {
 		}
 	}
 }
+
+const templateLight = {}

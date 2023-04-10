@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <title>RPId View</title>
 <head>
 	<link href="data:image/x-icon;base64,AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAIAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAbAAACnAUBJ98BAASnAAAAIwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMAAABxAAAC5DIEvf9FBP3/NwTP/wIACukAAAByAAAACgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABACAAm/IQKH/w4BSv8LAUP/HwKF/xMCWf8MAUX/IwKN/wMAF9EAAAAhAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGALAOt/0wF//8eAn3/HAJ6/zoE2P8kA5T/HgJ//0sE//81BMj/AQAEpwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0j8E6v81BMv/BQEn/0ME9v9CBPX/RwT//xMCWv82BM3/RwT//wMBFN4AAAAAAAAAAAAAAAAAAAAAAAAARw4CSf8OAkz/AwEX/wUBJP8rA6b/QgT0/zMDxP8FAST/BQEp/x4CgP8LAUT9AAAAQwAAAAAAAAAAAAAAAAAAAaA9BOL/CgE//ykDo/9CBPX/JgOa/wUBKf8bAnP/PgTn/ywDrf8IATf/OwTc/wAAAZ0AAAAAAAAAAAAAAAAAAAGCMQO8/x0Cev8+BOT/QgTz/0ME+f8JATr/PATe/0IE9v9ABO7/IgOL/zMEw/8AAAGHAAAAAAAAAAAAAAAAAAAAFQMAFdMFASn/IwKO/0YE//88BOD/BAEd/zYEzf9HBP//KwOn/woBO/8EAR/aAAAAGwAAAAAAAAAAAAAAAAAAAAAAAABrJgOb/xsCdv8QAk//GgJw/xsCdf8hA4b/FgJl/yECh/8lA5j/AAAAZwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGwcANN83AM//DgBH/y8Ct/9LBP//OAPU/xQAWv81AMr/BgAt3gAAABYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAQC2AFEy/wRmTP8EBh7/DwBP/wQCHf8DWkX/AF81/wAEAMsAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB/AHA2/wDIWP8AulD/AFId/wAGAP8APAv/AK9M/wDJWf8AjEL/AQMCrQAAAAAAAAAAAAAAAAAAAAAAAAAKAR8K6QDCXP8Aq1H/AJBF/wC6V/8ANRf/ALBQ/wCVRP8Ao0z/AMle/wBAHf8AAAAkAAAAAAAAAAAAAAAAAAAAGAEkDv8AoEv/AKlQ/wCvUf8AdDb/AAIBvwBcKf8ArFD/AKtR/wClT/8AQR7/AAAAPAAAAAAAAAAAAAAAAAAAAAIAAABSAQICngISBtMBBwS6AAAAbwAAAAQAAABXAQQDsQITB9MBBAOrAAAAZAAAAAkAAAAA/j8AAPwfAADwBwAA4AMAAOADAADgAwAAwAEAAMABAADgAwAA8AcAAPAHAADwBwAA8AMAAOADAADgAwAA8ccAAA==" rel="icon" type="image/x-icon" />
@@ -7,7 +8,8 @@
 	<script src='https://cdn.plot.ly/plotly-2.20.0.min.js'></script>
 	<style>
 		body {
-			background-color: rgb(17,17,17) !important;
+			background-color: rgb(17,17,17);
+			font-family: Verdana, Geneva, Tahoma, sans-serif;
 		}
 	</style>
 </head>
@@ -16,20 +18,33 @@
 	<div id='main'><!-- CPU temp and fan RPM chart --></div>
 	<div id='la5m'><!-- 5 minute load average chart --></div>
 	<div id='bmp280'><!-- atmospheric pressure chart --></div>
+	<!-- theme switch -->
+	<div id="theme-switch" style="position: absolute; top: 0; left: 0; padding: 4px; font-size: small; background-color: rgba(0,0,0,0.5); color: white; cursor: pointer;">
+		<span id="theme-switch-text">Dark/Light</span>
+	</div>
 
 <script src="/web/chart_tpl.min.js" type="text/javascript"></script>
 <script>
 
-let template = templateDark;
+var template;
 
 async function getData(module) {
-    let url = '/viewData/'+module;
-    try {
-        let resp = await fetch(url);
-        return await resp.json();
-    } catch (error) {
-        console.log(error);
-    }
+
+	var theme = localStorage.getItem('theme');
+	if (theme != null && theme == 'light') {
+		template = templateLight;
+		document.body.style.backgroundColor = "white";
+	} else {
+		template = templateDark;
+	}
+
+	let url = '/viewData/'+module;
+	try {
+		let resp = await fetch(url);
+		return await resp.json();
+	} catch (error) {
+		console.log(error);
+	}
 }
 
 async function loadMain() {
@@ -92,7 +107,7 @@ async function loadLa5m() {
 	let data = await getData("system");
 
 	// check if there pressure data
-	if (data["la5m"] == null) {
+	if (data == null || data["la5m"] == null) {
 		return;
 	}
 
@@ -139,7 +154,7 @@ async function loadBMP280() {
 	let data = await getData("bmp280");
 
 	// check if there pressure data
-	if (data["pressure"] == null) {
+	if (data == null || data["pressure"] == null) {
 		return;
 	}
 
@@ -178,6 +193,21 @@ async function loadCharts() {
 var interval = setInterval(loadCharts, 60000);
 
 loadCharts();
+
+// Implement switching between light and dark themes
+var themeswitch = document.getElementById('theme-switch');
+themeswitch.onclick = function() {
+	if (template == templateDark) {
+		template = templateLight;
+		document.body.style.backgroundColor = "white";
+		localStorage.setItem('theme', 'light');
+	} else {
+		template = templateDark;
+		document.body.style.backgroundColor = "rgb(17,17,17)";
+		localStorage.setItem('theme', 'dark');
+	}
+	loadCharts();
+}
 
 </script>
 </body>
