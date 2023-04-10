@@ -66,13 +66,14 @@ func (r *Bmp280Reporter) Collect(ctx context.Context) error {
 	r.data["temp"] = append(r.data["temp"], tempMilliC)
 	r.mx.Unlock()
 
+	log.Printf("[DEBUG] BMP280: %8s | %s hPa \n", r.bmp280Data.Temperature, pressurePa)
+
 	if r.store != nil {
 		err := r.store.Write(ctx, model.Data{Module: r.Name(), Topic: "pressure", Value: fmt.Sprint(pressurePa / 100)})
 		if err != nil {
-			log.Printf("[ERROR] Bmp280Reporter: failed to write to storage: %v", err)
+			return fmt.Errorf("[ERROR] Bmp280Reporter: failed to write to storage: %v", err)
 		}
 	}
-	log.Printf("BMP280: %8s | %s hPa \n", r.bmp280Data.Temperature, pressurePa)
 	return nil
 }
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -11,6 +12,8 @@ import (
 	"sync"
 
 	"github.com/parMaster/rpid/config"
+	"github.com/parMaster/rpid/storage"
+	"github.com/parMaster/rpid/storage/model"
 )
 
 type ShortFloat float64 // for JSON, to leave only 2 digits after the point
@@ -29,18 +32,24 @@ type Response struct {
 }
 
 type SystemReporter struct {
-	data Response
-	dbg  bool
-	mx   sync.Mutex
+	data  Response
+	dbg   bool
+	mx    sync.Mutex
+	store storage.Storer
 }
 
-func LoadSystemReporter(cfg config.System, dbg bool) (*SystemReporter, error) {
+func LoadSystemReporter(cfg config.System, store storage.Storer, dbg bool) (*SystemReporter, error) {
 	if !cfg.Enabled {
 		return nil, fmt.Errorf("SystemReporter is not enabled")
 	}
 
+	if store != nil {
+		log.Printf("[DEBUG] SystemReporter: using storage (%T)", store)
+	}
+
 	return &SystemReporter{
-		dbg: dbg,
+		dbg:   dbg,
+		store: store,
 		data: Response{
 			TimeInState: map[string]int{},
 			LoadAvg:     map[string][]ShortFloat{},
@@ -52,25 +61,31 @@ func (r *SystemReporter) Name() string {
 	return "system"
 }
 
-func (r *SystemReporter) Collect(context.Context) error {
-	var err error
+func (r *SystemReporter) Collect(ctx context.Context) (err error) {
 	r.mx.Lock()
 	defer r.mx.Unlock()
 
 	r.data.TimeInState, err = r.getCPUTimeInState(r.dbg)
 	if err != nil {
-		log.Printf("[ERROR] failed to get cpu time in state: %v", err)
+		return errors.Join(err, errors.New("failed to get cpu time in state"))
 	}
 
 	la, err := r.getLoadAvg(r.dbg)
 	if err != nil {
-		log.Printf("[ERROR] failed to get load avg: %v", err)
+		return errors.Join(err, fmt.Errorf("failed to get load avg: %v", err))
 	} else {
 		r.data.LoadAvg["1m"] = append(r.data.LoadAvg["1m"], la["1m"])
 		r.data.LoadAvg["5m"] = append(r.data.LoadAvg["5m"], la["5m"])
 		r.data.LoadAvg["15m"] = append(r.data.LoadAvg["15m"], la["15m"])
+
+		if r.store != nil {
+			err := r.store.Write(ctx, model.Data{Module: r.Name(), Topic: "la5m", Value: la["5m"].String()})
+			if err != nil {
+				return errors.Join(err, fmt.Errorf("failed to write to storage: %v", err))
+			}
+		}
 	}
-	return nil
+	return err
 }
 
 func (r *SystemReporter) Report() (interface{}, error) {

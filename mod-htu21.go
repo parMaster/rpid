@@ -53,7 +53,7 @@ func (r *Htu21Reporter) Collect(context.Context) error {
 	r.data["temp"] = append(r.data["temp"], int(tempMilliC))
 	r.mx.Unlock()
 
-	log.Printf("HTU21: %8s | %s (%d mRh) \n", r.htu21Data.Temperature, r.htu21Data.Humidity, humidMilliRH)
+	log.Printf("[DEBUG] HTU21: %8s | %s (%d mRh) \n", r.htu21Data.Temperature, r.htu21Data.Humidity, humidMilliRH)
 	return nil
 }
 

@@ -9,7 +9,7 @@ import (
 )
 
 func Test_SystemReporter(t *testing.T) {
-	r, err := LoadSystemReporter(config.System{Enabled: true}, true)
+	r, err := LoadSystemReporter(config.System{Enabled: true}, nil, true)
 	assert.NoError(t, err)
 
 	ctx := context.Background()

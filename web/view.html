@@ -13,8 +13,9 @@
 </head>
 
 <body>
-	<div id='main'><!-- Plotly chart will be drawn inside this DIV --></div>
-	<div id='bmp280'><!-- Plotly chart will be drawn inside this DIV --></div>
+	<div id='main'><!-- CPU temp and fan RPM chart --></div>
+	<div id='la5m'><!-- 5 minute load average chart --></div>
+	<div id='bmp280'><!-- atmospheric pressure chart --></div>
 
 <script src="/web/chart_tpl.min.js" type="text/javascript"></script>
 <script>
@@ -35,7 +36,7 @@ async function loadMain() {
 	let data = await getData("main");
 
 	// check if there temp data
-	if (data["temp"] == null) {
+	if (data == null || data["temp"] == null) {
 		return;
 	}
 
@@ -87,6 +88,53 @@ async function loadMain() {
 	Plotly.newPlot('main', plots, MainLayout);
 }
 
+async function loadLa5m() {
+	let data = await getData("system");
+
+	// check if there pressure data
+	if (data["la5m"] == null) {
+		return;
+	}
+
+	for (var key in data["la5m"]) {
+		data["la5m"][key] = parseFloat(data["la5m"][key]);
+	}
+
+	var chartData = {
+		x: Object.keys(data["la5m"]),
+		y: Object.values(data["la5m"]),
+		type: 'scatter',
+		name: 'CPU LA 5m',
+		yaxis: 'y',
+	};
+
+	var fakeData = {
+		x: [],
+		y: [],
+		type: 'scatter',
+		name: '',
+		yaxis: 'y2',
+		visible: false
+	};
+
+	var chartLayout = {
+		title: "CPU load",
+		margin: {"t": 32, "b": 0, "l": 48, "r": 128},
+		height: 250,
+		template: template,
+		// added yaxis2 just because temp-rpm chart has it, so relayout event will work
+		yaxis2:{
+			title: '',
+			overlaying: 'y',
+			side: 'right',
+			showgrid: false,
+			showticklabels: false,
+			visible: false
+		}
+	};
+	Plotly.newPlot('la5m', [chartData, fakeData], chartLayout);
+}
+
 async function loadBMP280() {
 	let data = await getData("bmp280");
 
@@ -115,7 +163,16 @@ async function loadBMP280() {
 
 async function loadCharts() {
 	await loadMain();
+	await loadLa5m();
 	await loadBMP280();
+
+	var mainDiv = document.getElementById('main');
+	var la5mDiv = document.getElementById('la5m');
+
+	mainDiv.on('plotly_relayout', function(eventdata){
+		Plotly.relayout(la5mDiv, eventdata);
+	});
+
 }
 
 var interval = setInterval(loadCharts, 60000);

@@ -424,7 +424,7 @@ func (w *Worker) logEveryMinute(ctx context.Context) {
 func (w *Worker) loadModules() (names []string) {
 
 	if w.config.Modules.System.Enabled {
-		sys, err := LoadSystemReporter(w.config.Modules.System, w.config.Server.Dbg)
+		sys, err := LoadSystemReporter(w.config.Modules.System, w.store, w.config.Server.Dbg)
 		if err != nil {
 			log.Printf("%e", err)
 		} else {
