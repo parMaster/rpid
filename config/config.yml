@@ -8,7 +8,7 @@ storage:
 fan:
   tachPin: GPIO15
   controlPin: GPIO18
-  high: 45
+  high: 48 # 45C is optimal for winter, 48 is OK for summer to avoid frequent FAN activations
   low: 40
 modules:
   i2c: 4
