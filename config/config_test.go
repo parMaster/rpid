@@ -18,7 +18,7 @@ func Test_LoadConfig(t *testing.T) {
 		Fan: Fan{
 			TachPin:    "GPIO15",
 			ControlPin: "GPIO18",
-			High:       45,
+			High:       48,
 			Low:        40,
 		},
 		Storage: Storage{
