@@ -3,6 +3,11 @@ BRANCH=$(subst /,-,$(B))
 GITREV=$(shell git describe --abbrev=7 --always --tags)
 REV=$(GITREV)-$(BRANCH)-$(shell date +%Y%m%d)
 
+# get current user name
+USER=$(shell whoami)
+# get current user group
+GROUP=$(shell id -gn)
+
 build:
 	curl -X POST -s --data-urlencode "input=$$(cat web/chart_tpl.js)" -o web/chart_tpl.min.js https://www.toptal.com/developers/javascript-minifier/api/raw
 	go build -o dist/rpid -v
@@ -17,9 +22,10 @@ deploy:
 	make build
 	sudo systemctl stop rpid.service || true
 	sudo cp dist/rpid /usr/bin/
+	sed -i "s/%USER%/$(USER)/g" dist/rpid.service
 	sudo cp dist/rpid.service /etc/systemd/system/
 	sudo mkdir -p /etc/rpid
-	sudo chown pi:pi /etc/rpid
+	sudo chown $(USER):$(GROUP) /etc/rpid
 	cp config/config.yml /etc/rpid/
 	touch /etc/rpid/data.db
 	chmod 0755 /etc/rpid/data.db
