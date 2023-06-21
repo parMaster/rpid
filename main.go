@@ -20,6 +20,7 @@ import (
 	"github.com/parMaster/rpid/config"
 	"github.com/parMaster/rpid/storage"
 	"github.com/parMaster/rpid/storage/model"
+	"github.com/parMaster/rpid/web"
 	flags "github.com/umputun/go-flags"
 	"periph.io/x/conn/v3/gpio"
 	"periph.io/x/conn/v3/gpio/gpioreg"
@@ -27,15 +28,6 @@ import (
 	"periph.io/x/conn/v3/i2c/i2creg"
 	"periph.io/x/host/v3"
 )
-
-//go:embed web/chart.html
-var chart_html string
-
-//go:embed web/view.html
-var view_html string
-
-//go:embed web/chart_tpl.min.js
-var chart_tpl_min_js string
 
 type historical map[string][]int
 
@@ -261,32 +253,18 @@ func (w *Worker) router() http.Handler {
 	})
 
 	router.Get("/charts", func(rw http.ResponseWriter, r *http.Request) {
-		if w.config.Server.Dbg {
-			if b, err := os.ReadFile("chart.html"); err == nil {
-				rw.Write([]byte(b))
-			}
-		} else {
-			rw.Write([]byte(chart_html))
-		}
+		w.responseWithFile("web/chart.html", rw)
 	})
 	router.Get("/web/chart_tpl.min.js", func(rw http.ResponseWriter, r *http.Request) {
 		rw.Header().Set("Content-Type", "application/javascript")
-		if w.config.Server.Dbg {
-			if b, err := os.ReadFile("web/chart_tpl.min.js"); err == nil {
-				rw.Write([]byte(b))
-			}
-		} else {
-			rw.Write([]byte(chart_tpl_min_js))
-		}
+		w.responseWithFile("web/chart_tpl.min.js", rw)
+	})
+	router.Get("/web/plotly.min.js", func(rw http.ResponseWriter, r *http.Request) {
+		rw.Header().Set("Content-Type", "application/javascript")
+		w.responseWithFile("web/plotly.min.js", rw)
 	})
 	router.Get("/view", func(rw http.ResponseWriter, r *http.Request) {
-		if w.config.Server.Dbg {
-			if b, err := os.ReadFile("view.html"); err == nil {
-				rw.Write([]byte(b))
-			}
-		} else {
-			rw.Write([]byte(view_html))
-		}
+		w.responseWithFile("web/view.html", rw)
 	})
 
 	router.Get("/viewData/{module}", func(rw http.ResponseWriter, r *http.Request) {
@@ -311,6 +289,24 @@ func (w *Worker) router() http.Handler {
 	})
 
 	return router
+}
+
+func (w *Worker) responseWithFile(file string, rw http.ResponseWriter) error {
+	var html []byte
+	var err error
+	if w.config.Server.Dbg {
+		html, err = os.ReadFile(file)
+	} else {
+		file = file[4:] // cut off web/ prefix
+		html, err = web.WebAssets.ReadFile(file)
+	}
+	if err != nil {
+		log.Printf("[ERROR] failed to read %s, %v", file, err)
+		rw.WriteHeader(http.StatusInternalServerError)
+		return err
+	}
+	rw.Write(html)
+	return nil
 }
 
 func (w *Worker) getFullData() interface{} {
