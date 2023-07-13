@@ -8,7 +8,8 @@ require (
 	github.com/go-pkgz/rest v1.17.0
 	github.com/mattn/go-sqlite3 v1.14.16
 	github.com/parMaster/htu21 v0.0.0-20230220190438-31e4538dc67a
-	github.com/stretchr/testify v1.8.2
+	github.com/parMaster/mcache v0.0.0-20230710130850-062e48b74ec9
+	github.com/stretchr/testify v1.8.4
 	github.com/umputun/go-flags v1.5.1
 	gopkg.in/yaml.v3 v3.0.1
 	periph.io/x/conn/v3 v3.7.0

@@ -17,6 +17,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-pkgz/lgr"
 	"github.com/go-pkgz/rest"
+	"github.com/parMaster/mcache"
 	"github.com/parMaster/rpid/config"
 	"github.com/parMaster/rpid/storage"
 	"github.com/parMaster/rpid/storage/model"
@@ -47,6 +48,7 @@ type Worker struct {
 	modules Modules
 	mx      sync.Mutex
 	store   storage.Storer
+	cache   mcache.Cacher
 	ctx     context.Context
 }
 
@@ -60,6 +62,7 @@ func NewWorker(config *config.Parameters) *Worker {
 	w := &Worker{
 		config: *config,
 		data:   data,
+		cache:  mcache.NewCache(),
 	}
 
 	return w
@@ -301,11 +304,16 @@ func (w *Worker) router() http.Handler {
 		}
 		rw.Header().Set("Content-Type", "application/json")
 		rw.Header().Set("Access-Control-Allow-Origin", "*")
-		out, err := w.store.View(w.ctx, module)
+
+		out, err := w.cache.Get(module)
 		if err != nil {
-			log.Printf("[ERROR] Failed to get view: %v", err)
-			rw.WriteHeader(http.StatusInternalServerError)
-			return
+			out, err = w.store.View(w.ctx, module)
+			if err != nil {
+				log.Printf("[ERROR] Failed to get view: %v", err)
+				rw.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			w.cache.Set(module, out, 60)
 		}
 		json.NewEncoder(rw).Encode(out)
 	})

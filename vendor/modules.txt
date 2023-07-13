@@ -18,14 +18,17 @@ github.com/mattn/go-sqlite3
 # github.com/parMaster/htu21 v0.0.0-20230220190438-31e4538dc67a
 ## explicit; go 1.20
 github.com/parMaster/htu21
+# github.com/parMaster/mcache v0.0.0-20230710130850-062e48b74ec9
+## explicit; go 1.20
+github.com/parMaster/mcache
 # github.com/pmezard/go-difflib v1.0.0
 ## explicit
 github.com/pmezard/go-difflib/difflib
 # github.com/sigurn/crc8 v0.0.0-20220107193325-2243fe600f9f
 ## explicit; go 1.17
 github.com/sigurn/crc8
-# github.com/stretchr/testify v1.8.2
-## explicit; go 1.13
+# github.com/stretchr/testify v1.8.4
+## explicit; go 1.20
 github.com/stretchr/testify/assert
 # github.com/umputun/go-flags v1.5.1
 ## explicit; go 1.12
