@@ -73,10 +73,12 @@ func (w *Worker) Run(ctx context.Context) error {
 		log.Fatal(err)
 	}
 
-	w.i2cBus, err = i2creg.Open(w.config.Modules.I2C)
-	if err != nil {
-		log.Printf("[ERROR] failed to open I²C: %v", err)
-		return err
+	if w.config.Modules.I2C != "" {
+		w.i2cBus, err = i2creg.Open(w.config.Modules.I2C)
+		if err != nil {
+			log.Printf("[ERROR] failed to open I²C: %v", err)
+			return err
+		}
 	}
 
 	w.loadModules()
@@ -97,10 +99,12 @@ func (w *Worker) Run(ctx context.Context) error {
 
 	<-ctx.Done()
 	time.Sleep(2 * time.Second) // wait 2 secs till tach timeout (1 sec) hits
-	log.Println("[DEBUG] Closing I²C Bus on exit")
-	if err := w.i2cBus.Close(); err != nil {
-		log.Printf("[ERROR] Closing I²C: %e", err)
-		return err
+	if w.i2cBus != nil {
+		log.Println("[DEBUG] Closing I²C Bus on exit")
+		if err := w.i2cBus.Close(); err != nil {
+			log.Printf("[ERROR] Closing I²C: %e", err)
+			return err
+		}
 	}
 	return nil
 }
@@ -116,7 +120,7 @@ func (w *Worker) setFanState(fanControl gpio.PinIO, state bool) error {
 
 func (w *Worker) controlFan(ctx context.Context) {
 	if w.config.Fan.ControlPin == "" {
-		log.Println("[DEBUG] No fan ControlPin defined, skipping fan control")
+		log.Println("[INFO] No fan ControlPin defined, skipping fan control")
 		return
 	}
 	fanControl := gpioreg.ByName(w.config.Fan.ControlPin)
@@ -181,7 +185,7 @@ func (w *Worker) controlFan(ctx context.Context) {
 
 func (w *Worker) startTach(ctx context.Context) {
 	if w.config.Fan.TachPin == "" {
-		log.Println("[DEBUG] No tachymeter configured")
+		log.Println("[INFO] No tachymeter configured")
 		return
 	}
 	w.data["revs"] = []int{}
@@ -454,6 +458,16 @@ func (w *Worker) loadModules() (names []string) {
 		} else {
 			w.modules = append(w.modules, modhtu21)
 			names = append(names, modhtu21.Name())
+		}
+	}
+
+	if w.config.Modules.Smc768.Enabled {
+		modsmc768, err := LoadSmc768Reporter(w.config.Modules.Smc768, w.store, w.config.Server.Dbg)
+		if err != nil {
+			log.Printf("%e", err)
+		} else {
+			w.modules = append(w.modules, modsmc768)
+			names = append(names, modsmc768.Name())
 		}
 	}
 

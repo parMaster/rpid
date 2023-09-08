@@ -20,6 +20,7 @@ type Modules struct {
 	BMP280 BMP280 `yaml:"bmp280"`
 	HTU21  HTU21  `yaml:"htu21"`
 	System System `yaml:"system"`
+	Smc768 Smc768 `yaml:"smc768"`
 	// to scan for i2c interfaces:
 	// $ i2cdetect -l
 	// i2c-4	i2c	400000002.i2c	I²C adapter
@@ -63,6 +64,9 @@ type HTU21 struct {
 	Htu21Addr uint16 `yaml:"addr,omitempty"`
 }
 type System struct {
+	Enabled bool `yaml:"enabled,omitempty"`
+}
+type Smc768 struct {
 	Enabled bool `yaml:"enabled,omitempty"`
 }
 

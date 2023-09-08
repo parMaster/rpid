@@ -1,0 +1,11 @@
+# config for Macmini 2014 with SMC768
+server:
+  listen: :8095
+  dbg: true
+storage:
+  type: sqlite
+  path: file:/etc/rpid/data.db?mode=rwc&_journal_mode=WAL
+  readOnly: false
+modules:
+  smc768:
+    enabled: true
