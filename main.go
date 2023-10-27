@@ -540,17 +540,18 @@ func main() {
 	// Graceful termination
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
-		if x := recover(); x != nil {
-			log.Printf("[WARN] run time panic:\n%v", x)
-			panic(x)
-		}
-
 		// catch signal and invoke graceful termination
 		stop := make(chan os.Signal, 1)
 		signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 		<-stop
 		log.Println("Shutdown signal received\n*********************************")
 		cancel()
+	}()
+
+	defer func() {
+		if x := recover(); x != nil {
+			log.Printf("[WARN] run time panic: %+v", x)
+		}
 	}()
 
 	NewWorker(conf).Run(ctx)
