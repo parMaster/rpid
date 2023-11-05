@@ -20,3 +20,5 @@ modules:
     addr: 0x40
   system:
     enabled: true
+#  smc768: # for Macmini 2014 with SMC768
+#    enabled: true

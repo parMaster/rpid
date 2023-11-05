@@ -18,6 +18,7 @@
 	<div id='main'><!-- CPU temp and fan RPM chart --></div>
 	<div id='la5m'><!-- 5 minute load average chart --></div>
 	<div id='bmp280'><!-- atmospheric pressure chart --></div>
+	<div id='smc768'><!-- atmospheric pressure chart --></div>
 	<!-- theme switch -->
 	<div id="theme-switch" style="position: absolute; top: 0; left: 0; padding: 4px; font-size: small; background-color: rgba(0,0,0,0.5); color: white; cursor: pointer;">
 		<span id="theme-switch-text">Dark/Light</span>
@@ -103,6 +104,62 @@ async function loadMain() {
 	Plotly.newPlot('main', plots, MainLayout);
 }
 
+async function loadSmc768() {
+	let data = await getData("smc768");
+
+	// check if there temp data
+	if (data == null || data["TC0C"] == null) {
+		return;
+	}
+
+	for (var key in data["TC0C"]) {
+		data["TC0C"][key] = parseInt(data["TC0C"][key]);
+	}
+
+	var temp = {
+		x: Object.keys(data["TC0C"]),
+		y: Object.values(data["TC0C"]),
+		type: 'scatter',
+		name: 'CPU, m˚C'
+	};
+
+	var Layout = {
+		yaxis: {
+			title: 'CPU, m˚C',
+			gridcolor: 'rgba(99, 110, 250, 0.2)'
+		},
+		margin: {"t": 32, "b": 0, "l": 0, "r": 0},
+		height: 400,
+		template: template
+	}
+	plots = [temp];
+
+	// check if there rpm data
+	if (data["Exhaust"] != null) {
+
+		for (var key in data["Exhaust"]) {
+			data["Exhaust"][key] = parseInt(data["Exhaust"][key]);
+		}
+
+		var rpm = {
+			x: Object.keys(data["Exhaust"]),
+			y: Object.values(data["Exhaust"]),
+			type: 'scatter',
+			name: 'Fan RPM',
+			yaxis: 'y2',
+		};
+		Layout.yaxis2 = {
+			title: 'Fan RPM',
+			overlaying: 'y',
+			side: 'right',
+			gridcolor: 'rgba(239, 85, 59, 0.2)',
+			showgrid: false,
+		}
+		plots.push(rpm);
+	}
+	Plotly.newPlot('smc768', plots, Layout);
+}
+
 async function loadLa5m() {
 	let data = await getData("system");
 
@@ -180,6 +237,7 @@ async function loadCharts() {
 	await loadMain();
 	await loadLa5m();
 	await loadBMP280();
+	await loadSmc768();
 
 	var mainDiv = document.getElementById('main');
 	var la5mDiv = document.getElementById('la5m');

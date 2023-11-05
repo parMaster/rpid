@@ -32,7 +32,9 @@ var Sensors = []string{
 	"ThrottleTime", // Core throttle time in milliseconds
 }
 
-type Smc768Response map[string]string
+type Smc768Data map[string]string
+
+type Smc768Response map[string][]string
 
 type Smc768Reporter struct {
 	data  Smc768Response
@@ -53,7 +55,7 @@ func LoadSmc768Reporter(cfg config.Smc768, store storage.Storer, dbg bool) (*Smc
 	return &Smc768Reporter{
 		dbg:   dbg,
 		store: store,
-		data:  make(map[string]string),
+		data:  make(Smc768Response),
 	}, nil
 }
 
@@ -65,14 +67,14 @@ func (r *Smc768Reporter) Collect(ctx context.Context) (err error) {
 	r.mx.Lock()
 	defer r.mx.Unlock()
 
-	r.data = r.ReadSMC768()
+	data := r.ReadSMC768()
 	if err != nil {
 		return errors.Join(err, fmt.Errorf("failed to get load avg: %v", err))
 	}
 
 	if r.store != nil {
 		for _, label := range Sensors {
-			err := r.store.Write(ctx, model.Data{Module: r.Name(), Topic: label, Value: r.data[label]})
+			err := r.store.Write(ctx, model.Data{Module: r.Name(), Topic: label, Value: data[label]})
 			if err != nil {
 				return errors.Join(err, fmt.Errorf("failed to write to storage: %v", err))
 			}
@@ -87,9 +89,9 @@ func (r *Smc768Reporter) Report() (interface{}, error) {
 	return r.data, nil
 }
 
-func (r *Smc768Reporter) ReadSMC768() Smc768Response {
+func (r *Smc768Reporter) ReadSMC768() Smc768Data {
 
-	data := make(Smc768Response)
+	data := make(Smc768Data)
 
 	// Read the data from the SMC768 and store it in the data map
 	for i := 1; i <= 60; i++ {
@@ -97,11 +99,14 @@ func (r *Smc768Reporter) ReadSMC768() Smc768Response {
 		label := ReadInput(fmt.Sprintf("/sys/devices/platform/applesmc.768/temp%d_label", i))
 		if slices.Contains(Sensors, label) {
 			data[label] = value
+			r.data[label] = append(r.data[label], value)
 		}
 	}
 
 	data["Exhaust"] = ReadInput("/sys/devices/platform/applesmc.768/fan1_input")
+	r.data["Exhaust"] = append(r.data["Exhaust"], data["Exhaust"])
 	data["ThrottleTime"] = ReadInput("/sys/devices/system/cpu/cpu0/thermal_throttle/core_throttle_total_time_ms")
+	r.data["ThrottleTime"] = append(r.data["ThrottleTime"], data["ThrottleTime"])
 
 	if r.dbg {
 		log.Printf("[DEBUG] Smc768Reporter: data:")
@@ -120,7 +125,7 @@ func ReadInput(file string) (v string) {
 		fmt.Println(err)
 	}
 
-	v = strings.TrimSpace(string(value))
+	v = strings.Trim(strings.TrimSpace(string(value)), "\n")
 
 	return
 }

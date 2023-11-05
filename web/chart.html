@@ -20,6 +20,7 @@
 	<div id='TimeInState'><!-- Plotly chart will be drawn inside this DIV --></div>
 	<div id='AmbTempChart'><!-- Plotly chart will be drawn inside this DIV --></div>
 	<div id='PressureChart'><!-- Plotly chart will be drawn inside this DIV --></div>
+	<div id='Smc768Chart'><!-- Plotly chart will be drawn inside this DIV --></div>
 	<!-- theme switch -->
 	<div id="theme-switch" style="position: absolute; top: 0; left: 0; padding: 4px; font-size: small; background-color: rgba(0,0,0,0.5); color: white; cursor: pointer;">
 		<span id="theme-switch-text">Dark/Light</span>
@@ -205,6 +206,44 @@ async function loadChart() {
 			template: template
 		}
 		Plotly.newPlot('TimeInState', [TimeInState], TISlayout);
+	}
+
+	// check if there is object with name "Modules" and if it has "bmp280" and "htu21" keys
+	if (data["Modules"] && data["Modules"]["smc768"]
+		&& data["Modules"]["smc768"]["TC0C"]
+		&& data["Modules"]["smc768"]["Exhaust"] ) {
+
+		var cpu_temp = {
+			x: data["Dates"],
+			y: data["Modules"]["smc768"]["TC0C"],
+			type: 'scatter',
+			name: 'CPU core Temp, m˚C'
+		};
+		var fan_rpm = {
+			x: data["Dates"],
+			y: data["Modules"]["smc768"]["Exhaust"],
+			type: 'scatter',
+			name: 'Fan RPM',
+			yaxis: 'y2',
+		};
+
+		var Layout = {
+			yaxis: {
+				title: 'CPU core Temp, m˚C',
+				gridcolor: 'rgba(99, 110, 250, 0.2)'
+			},
+			yaxis2: {
+				title: 'Fan RPM',
+				overlaying: 'y',
+				side: 'right',
+				gridcolor: 'rgba(239, 85, 59, 0.2)'
+			},
+			margin: {"t": 32, "b": 0, "l": 0, "r": 0},
+			height: 400,
+			template: template
+		}
+
+		Plotly.newPlot('Smc768Chart', [cpu_temp, fan_rpm], Layout);
 	}
 
 	tempDiv.on('plotly_relayout', function(eventdata){
