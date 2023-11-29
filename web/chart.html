@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <title>RPId Charts</title>
+<!-- <base href="http://rpi.local:8095/"> for testing on local machine -->
 <head>
 	<link href="data:image/x-icon;base64,AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAIAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAbAAACnAUBJ98BAASnAAAAIwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMAAABxAAAC5DIEvf9FBP3/NwTP/wIACukAAAByAAAACgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABACAAm/IQKH/w4BSv8LAUP/HwKF/xMCWf8MAUX/IwKN/wMAF9EAAAAhAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGALAOt/0wF//8eAn3/HAJ6/zoE2P8kA5T/HgJ//0sE//81BMj/AQAEpwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0j8E6v81BMv/BQEn/0ME9v9CBPX/RwT//xMCWv82BM3/RwT//wMBFN4AAAAAAAAAAAAAAAAAAAAAAAAARw4CSf8OAkz/AwEX/wUBJP8rA6b/QgT0/zMDxP8FAST/BQEp/x4CgP8LAUT9AAAAQwAAAAAAAAAAAAAAAAAAAaA9BOL/CgE//ykDo/9CBPX/JgOa/wUBKf8bAnP/PgTn/ywDrf8IATf/OwTc/wAAAZ0AAAAAAAAAAAAAAAAAAAGCMQO8/x0Cev8+BOT/QgTz/0ME+f8JATr/PATe/0IE9v9ABO7/IgOL/zMEw/8AAAGHAAAAAAAAAAAAAAAAAAAAFQMAFdMFASn/IwKO/0YE//88BOD/BAEd/zYEzf9HBP//KwOn/woBO/8EAR/aAAAAGwAAAAAAAAAAAAAAAAAAAAAAAABrJgOb/xsCdv8QAk//GgJw/xsCdf8hA4b/FgJl/yECh/8lA5j/AAAAZwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGwcANN83AM//DgBH/y8Ct/9LBP//OAPU/xQAWv81AMr/BgAt3gAAABYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAQC2AFEy/wRmTP8EBh7/DwBP/wQCHf8DWkX/AF81/wAEAMsAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB/AHA2/wDIWP8AulD/AFId/wAGAP8APAv/AK9M/wDJWf8AjEL/AQMCrQAAAAAAAAAAAAAAAAAAAAAAAAAKAR8K6QDCXP8Aq1H/AJBF/wC6V/8ANRf/ALBQ/wCVRP8Ao0z/AMle/wBAHf8AAAAkAAAAAAAAAAAAAAAAAAAAGAEkDv8AoEv/AKlQ/wCvUf8AdDb/AAIBvwBcKf8ArFD/AKtR/wClT/8AQR7/AAAAPAAAAAAAAAAAAAAAAAAAAAIAAABSAQICngISBtMBBwS6AAAAbwAAAAQAAABXAQQDsQITB9MBBAOrAAAAZAAAAAkAAAAA/j8AAPwfAADwBwAA4AMAAOADAADgAwAAwAEAAMABAADgAwAA8AcAAPAHAADwBwAA8AMAAOADAADgAwAA8ccAAA==" rel="icon" type="image/x-icon" />
 	<!-- Doc: https://plotly.com/javascript/line-charts/pi -->
@@ -16,11 +17,6 @@
 
 <body>
 	<div id='TempRpmChart'><!-- Plotly chart will be drawn inside this DIV --></div>
-	<div id='LoadAvg'><!-- Plotly chart will be drawn inside this DIV --></div>
-	<div id='TimeInState'><!-- Plotly chart will be drawn inside this DIV --></div>
-	<div id='AmbTempChart'><!-- Plotly chart will be drawn inside this DIV --></div>
-	<div id='PressureChart'><!-- Plotly chart will be drawn inside this DIV --></div>
-	<div id='Smc768Chart'><!-- Plotly chart will be drawn inside this DIV --></div>
 	<!-- theme switch -->
 	<div id="theme-switch" style="position: absolute; top: 0; left: 0; padding: 4px; font-size: small; background-color: rgba(0,0,0,0.5); color: white; cursor: pointer;">
 		<span id="theme-switch-text">Dark/Light</span>
@@ -49,8 +45,13 @@ async function getData() {
 	}
 }
 
-var tempDiv = document.getElementById('TempRpmChart');
-var loadDiv = document.getElementById('LoadAvg');
+function createChartElement(chartId) {
+	if (document.getElementById(chartId) == null) {
+		var chartDiv = document.createElement('div');
+		chartDiv.id = chartId;
+		document.body.appendChild(chartDiv);
+	}
+}
 
 async function loadChart() {
 	let data = await getData();
@@ -91,10 +92,13 @@ async function loadChart() {
 		}
 		plots.push(rpm);
 	}
-	Plotly.newPlot(tempDiv, plots, TempRPMLayout);
+	Plotly.newPlot('TempRpmChart', plots, TempRPMLayout);
 
 	// LoadAvg chart configuration
 	if (data["Modules"] && data["Modules"]["system"] && data["Modules"]["system"]["LoadAvg"]) {
+
+		createChartElement('LoadAvg');
+
 		var LoadAvg1m = {
 			x: data["Dates"],
 			y: data["Modules"]["system"]["LoadAvg"]["1m"],
@@ -131,12 +135,14 @@ async function loadChart() {
 				visible: false
 			}
 		};
-		Plotly.newPlot(loadDiv, [LoadAvg1m, LoadAvg5m, LoadAvg15m], LoadAvgLayout);
+		Plotly.newPlot('LoadAvg', [LoadAvg1m, LoadAvg5m, LoadAvg15m], LoadAvgLayout);
 	}
 
 	// check if there is object with name "Modules" and if it has "bmp280" and "htu21" keys
 	if (data["Modules"] && data["Modules"]["bmp280"] && data["Modules"]["htu21"]
 		&& data["Modules"]["bmp280"]["temp"] && data["Modules"]["htu21"]["humidity"]) {
+
+		createChartElement('AmbTempChart');
 
 		var amb_temp = {
 			x: data["Dates"],
@@ -173,6 +179,9 @@ async function loadChart() {
 
 	// check if module bmp280 is loaded and has pressure data
 	if (data["Modules"] && data["Modules"]["bmp280"] && data["Modules"]["bmp280"]["pressure"]) {
+
+		createChartElement('PressureChart');
+
 		var press = {
 			x: data["Dates"],
 			y: data["Modules"]["bmp280"]["pressure"],
@@ -189,6 +198,9 @@ async function loadChart() {
 
 	// check if there is object with name "Modules" and if it has "system" key
 	if (data["Modules"] && data["Modules"]["system"] && data["Modules"]["system"]["TimeInState"]) {
+
+		createChartElement('TimeInState');
+
 		var TimeInState = {
 			type:"pie",
 			values: Object.values(data["Modules"]["system"]["TimeInState"]),
@@ -213,7 +225,10 @@ async function loadChart() {
 		&& data["Modules"]["smc768"]["TC0C"]
 		&& data["Modules"]["smc768"]["Exhaust"] ) {
 
-		// data["Modules"]["smc768"]["Exhaust"] is array of strings, convert it to array of numbers
+		createChartElement('Smc768Chart');
+
+		// convert strings to numbers
+		data["Modules"]["smc768"]["TC0C"] = data["Modules"]["smc768"]["TC0C"].map(Number);
 		data["Modules"]["smc768"]["Exhaust"] = data["Modules"]["smc768"]["Exhaust"].map(Number);
 
 		var cpu_temp = {
@@ -250,7 +265,7 @@ async function loadChart() {
 	}
 
 	tempDiv.on('plotly_relayout', function(eventdata){
-		Plotly.relayout(loadDiv, eventdata);
+		Plotly.relayout('LoadAvg', eventdata);
 		Plotly.relayout('AmbTempChart', eventdata);
 	});
 
