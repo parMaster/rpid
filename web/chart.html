@@ -213,6 +213,9 @@ async function loadChart() {
 		&& data["Modules"]["smc768"]["TC0C"]
 		&& data["Modules"]["smc768"]["Exhaust"] ) {
 
+		// data["Modules"]["smc768"]["Exhaust"] is array of strings, convert it to array of numbers
+		data["Modules"]["smc768"]["Exhaust"] = data["Modules"]["smc768"]["Exhaust"].map(Number);
+
 		var cpu_temp = {
 			x: data["Dates"],
 			y: data["Modules"]["smc768"]["TC0C"],
