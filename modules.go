@@ -17,3 +17,12 @@ func (m Modules) String() string {
 	}
 	return s
 }
+
+func (m Modules) Loaded(name string) bool {
+	for _, mod := range m {
+		if mod.Name() == name {
+			return true
+		}
+	}
+	return false
+}

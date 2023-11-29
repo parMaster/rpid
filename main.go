@@ -284,8 +284,15 @@ func (w *Worker) router() http.Handler {
 			rw.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		rw.Header().Set("Content-Type", "application/json")
+
 		rw.Header().Set("Access-Control-Allow-Origin", "*")
+
+		if !w.modules.Loaded(module) {
+			rw.WriteHeader(http.StatusNotImplemented)
+			return
+		}
+
+		rw.Header().Set("Content-Type", "application/json")
 
 		out, err := w.cache.Get(module)
 		if err != nil {

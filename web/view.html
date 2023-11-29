@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <title>RPId View</title>
 <head>
+	<!-- for testing on local machine -->
+	<base href="http://mini.local:8095/">
 	<link href="data:image/x-icon;base64,AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAIAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAbAAACnAUBJ98BAASnAAAAIwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMAAABxAAAC5DIEvf9FBP3/NwTP/wIACukAAAByAAAACgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABACAAm/IQKH/w4BSv8LAUP/HwKF/xMCWf8MAUX/IwKN/wMAF9EAAAAhAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGALAOt/0wF//8eAn3/HAJ6/zoE2P8kA5T/HgJ//0sE//81BMj/AQAEpwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0j8E6v81BMv/BQEn/0ME9v9CBPX/RwT//xMCWv82BM3/RwT//wMBFN4AAAAAAAAAAAAAAAAAAAAAAAAARw4CSf8OAkz/AwEX/wUBJP8rA6b/QgT0/zMDxP8FAST/BQEp/x4CgP8LAUT9AAAAQwAAAAAAAAAAAAAAAAAAAaA9BOL/CgE//ykDo/9CBPX/JgOa/wUBKf8bAnP/PgTn/ywDrf8IATf/OwTc/wAAAZ0AAAAAAAAAAAAAAAAAAAGCMQO8/x0Cev8+BOT/QgTz/0ME+f8JATr/PATe/0IE9v9ABO7/IgOL/zMEw/8AAAGHAAAAAAAAAAAAAAAAAAAAFQMAFdMFASn/IwKO/0YE//88BOD/BAEd/zYEzf9HBP//KwOn/woBO/8EAR/aAAAAGwAAAAAAAAAAAAAAAAAAAAAAAABrJgOb/xsCdv8QAk//GgJw/xsCdf8hA4b/FgJl/yECh/8lA5j/AAAAZwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGwcANN83AM//DgBH/y8Ct/9LBP//OAPU/xQAWv81AMr/BgAt3gAAABYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAQC2AFEy/wRmTP8EBh7/DwBP/wQCHf8DWkX/AF81/wAEAMsAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB/AHA2/wDIWP8AulD/AFId/wAGAP8APAv/AK9M/wDJWf8AjEL/AQMCrQAAAAAAAAAAAAAAAAAAAAAAAAAKAR8K6QDCXP8Aq1H/AJBF/wC6V/8ANRf/ALBQ/wCVRP8Ao0z/AMle/wBAHf8AAAAkAAAAAAAAAAAAAAAAAAAAGAEkDv8AoEv/AKlQ/wCvUf8AdDb/AAIBvwBcKf8ArFD/AKtR/wClT/8AQR7/AAAAPAAAAAAAAAAAAAAAAAAAAAIAAABSAQICngISBtMBBwS6AAAAbwAAAAQAAABXAQQDsQITB9MBBAOrAAAAZAAAAAkAAAAA/j8AAPwfAADwBwAA4AMAAOADAADgAwAAwAEAAMABAADgAwAA8AcAAPAHAADwBwAA8AMAAOADAADgAwAA8ccAAA==" rel="icon" type="image/x-icon" />
 	<!-- Doc: https://plotly.com/javascript/line-charts/pi -->
 	<!-- Dark theme derived from: https://jsfiddle.net/3hfq7ast/ -->
@@ -16,9 +18,6 @@
 
 <body>
 	<div id='main'><!-- CPU temp and fan RPM chart --></div>
-	<div id='la5m'><!-- 5 minute load average chart --></div>
-	<div id='bmp280'><!-- atmospheric pressure chart --></div>
-	<div id='smc768'><!-- atmospheric pressure chart --></div>
 	<!-- theme switch -->
 	<div id="theme-switch" style="position: absolute; top: 0; left: 0; padding: 4px; font-size: small; background-color: rgba(0,0,0,0.5); color: white; cursor: pointer;">
 		<span id="theme-switch-text">Dark/Light</span>
@@ -48,6 +47,14 @@ async function getData(module) {
 	}
 }
 
+function createChartElement(chartId) {
+	if (document.getElementById(chartId) == null) {
+		var chartDiv = document.createElement('div');
+		chartDiv.id = chartId;
+		document.body.appendChild(chartDiv);
+	}
+}
+
 async function loadMain() {
 	let data = await getData("main");
 
@@ -56,13 +63,9 @@ async function loadMain() {
 		return;
 	}
 
-	for (var key in data["temp"]) {
-		data["temp"][key] = parseInt(data["temp"][key]);
-	}
-
 	var temp = {
 		x: Object.keys(data["temp"]),
-		y: Object.values(data["temp"]),
+		y: Object.values(data["temp"]).map(Number),
 		type: 'scatter',
 		name: 'CPU, m˚C'
 	};
@@ -81,13 +84,9 @@ async function loadMain() {
 	// check if there rpm data
 	if (data["rpm"] != null) {
 
-		for (var key in data["rpm"]) {
-			data["rpm"][key] = parseInt(data["rpm"][key]);
-		}
-
 		var rpm = {
 			x: Object.keys(data["rpm"]),
-			y: Object.values(data["rpm"]),
+			y: Object.values(data["rpm"]).map(Number),
 			type: 'scatter',
 			name: 'Fan RPM',
 			yaxis: 'y2',
@@ -112,13 +111,11 @@ async function loadSmc768() {
 		return;
 	}
 
-	for (var key in data["TC0C"]) {
-		data["TC0C"][key] = parseInt(data["TC0C"][key]);
-	}
+	createChartElement('smc768');
 
 	var temp = {
 		x: Object.keys(data["TC0C"]),
-		y: Object.values(data["TC0C"]),
+		y: Object.values(data["TC0C"]).map(Number),
 		type: 'scatter',
 		name: 'CPU, m˚C'
 	};
@@ -137,13 +134,9 @@ async function loadSmc768() {
 	// check if there rpm data
 	if (data["Exhaust"] != null) {
 
-		for (var key in data["Exhaust"]) {
-			data["Exhaust"][key] = parseInt(data["Exhaust"][key]);
-		}
-
 		var rpm = {
 			x: Object.keys(data["Exhaust"]),
-			y: Object.values(data["Exhaust"]),
+			y: Object.values(data["Exhaust"]).map(Number),
 			type: 'scatter',
 			name: 'Fan RPM',
 			yaxis: 'y2',
@@ -168,13 +161,11 @@ async function loadLa5m() {
 		return;
 	}
 
-	for (var key in data["la5m"]) {
-		data["la5m"][key] = parseFloat(data["la5m"][key]);
-	}
+	createChartElement('la5m');
 
 	var chartData = {
 		x: Object.keys(data["la5m"]),
-		y: Object.values(data["la5m"]),
+		y: Object.values(data["la5m"]).map(parseFloat),
 		type: 'scatter',
 		name: 'CPU LA 5m',
 		yaxis: 'y',
@@ -215,13 +206,11 @@ async function loadBMP280() {
 		return;
 	}
 
-	for (var key in data["pressure"]) {
-		data["pressure"][key] = parseFloat(data["pressure"][key]);
-	}
+	createChartElement('bmp280');
 
 	var press = {
 		x: Object.keys(data["pressure"]),
-		y: Object.values(data["pressure"]),
+		y: Object.values(data["pressure"]).map(parseFloat),
 		type: 'scatter',
 		name: 'Pressure, hPa'
 	};
