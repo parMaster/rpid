@@ -14,9 +14,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/go-pkgz/lgr"
 	"github.com/go-pkgz/rest"
+	"github.com/go-pkgz/routegroup"
 	"github.com/parMaster/mcache"
 	"github.com/parMaster/rpid/config"
 	"github.com/parMaster/rpid/storage"
@@ -40,7 +40,7 @@ type Worker struct {
 	modules Modules
 	mx      sync.Mutex
 	store   storage.Storer
-	cache   mcache.Cacher
+	cache   mcache.Cacher[map[string]map[string]string]
 	ctx     context.Context
 }
 
@@ -54,7 +54,7 @@ func NewWorker(config *config.Parameters) *Worker {
 	w := &Worker{
 		config: *config,
 		data:   data,
-		cache:  mcache.NewCache(),
+		cache:  mcache.NewCache[map[string]map[string]string](),
 	}
 
 	return w
@@ -68,7 +68,7 @@ func (w *Worker) Run(ctx context.Context) error {
 		log.Printf("[ERROR] failed to load storage: %v", err)
 	}
 
-	// Load peripheral drivers
+	// load peripheral drivers
 	if _, err := host.Init(); err != nil {
 		log.Fatal(err)
 	}
@@ -162,22 +162,22 @@ func (w *Worker) controlFan(ctx context.Context) {
 		log.Printf("[DEBUG] 3 minutes moving average: %d", ma3min)
 		w.mx.Unlock()
 
-		// Fan activation conditions
-		if ma10sec > tempHigh+10000 || // Sudden spike
-			ma30sec > tempHigh+5000 || // Fast rise
-			ma1min > tempHigh || // High temperature
-			ma1min == 0 || // No data
-			ma3min == 0 { //  No data
+		// fan activation conditions
+		if ma10sec > tempHigh+10000 || // sudden spike
+			ma30sec > tempHigh+5000 || // fast rise
+			ma1min > tempHigh || // high temperature
+			ma1min == 0 || // no data
+			ma3min == 0 { //  no data
 
 			w.setFanState(fanControl, true)
 			continue
 		}
 
-		// Deactivate otherwise
-		if ma3min < tempLow || // Lower than low for 3 minutes
-			ma1min < tempLow-1000 || // Low enough
-			ma30sec < tempLow-2000 || // Fast decline
-			ma10sec < tempLow-4000 { // Sudden drop
+		// deactivate otherwise
+		if ma3min < tempLow || // lower than low for 3 minutes
+			ma1min < tempLow-1000 || // low enough
+			ma30sec < tempLow-2000 || // fast decline
+			ma10sec < tempLow-4000 { // sudden drop
 			w.setFanState(fanControl, false)
 		}
 	}
@@ -195,12 +195,12 @@ func (w *Worker) startTach(ctx context.Context) {
 		log.Fatalf("Failed to find %s", w.config.Fan.TachPin)
 	}
 
-	// Set pin as input, with an internal pull-up resistor:
+	// set pin as input, with an internal pull-up resistor:
 	if err := tach.In(gpio.PullUp, gpio.RisingEdge); err != nil {
 		log.Fatal(err)
 	}
 
-	// Count every rev or exit
+	// count every rev or exit
 	for {
 		select {
 		case <-ctx.Done():
@@ -237,10 +237,11 @@ func (w *Worker) startServer(ctx context.Context) {
 }
 
 func (w *Worker) router() http.Handler {
-	router := chi.NewRouter()
-	router.Use(rest.Throttle(5))
+	mux := http.NewServeMux()
+	router := routegroup.New(mux)
+	router.Use(rest.Throttle(20))
 
-	router.Get("/status", func(rw http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("GET /status", func(rw http.ResponseWriter, r *http.Request) {
 		w.mx.Lock()
 		resp := map[string]int{
 			"temp": last(w.data["temp"]) / 1000,
@@ -252,34 +253,34 @@ func (w *Worker) router() http.Handler {
 		json.NewEncoder(rw).Encode(resp)
 	})
 
-	router.Get("/fullData", func(rw http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("GET /fullData", func(rw http.ResponseWriter, r *http.Request) {
 		rw.Header().Set("Content-Type", "application/json")
 		rw.Header().Set("Access-Control-Allow-Origin", "*")
 		out := w.getFullData()
 		json.NewEncoder(rw).Encode(out)
 	})
 
-	router.Get("/charts", func(rw http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("GET /charts", func(rw http.ResponseWriter, r *http.Request) {
 		w.responseWithFile("web/chart.html", rw)
 	})
-	router.Get("/web/chart_tpl.min.js", func(rw http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("GET /web/chart_tpl.min.js", func(rw http.ResponseWriter, r *http.Request) {
 		rw.Header().Set("Content-Type", "application/javascript")
 		w.responseWithFile("web/chart_tpl.min.js", rw)
 	})
-	router.Get("/web/plotly.min.js", func(rw http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("GET /web/plotly.min.js", func(rw http.ResponseWriter, r *http.Request) {
 		rw.Header().Set("Content-Type", "application/javascript")
 		w.responseWithFile("web/plotly.min.js", rw)
 	})
-	router.Get("/view", func(rw http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("GET /view", func(rw http.ResponseWriter, r *http.Request) {
 		w.responseWithFile("web/view.html", rw)
 	})
 
-	router.Get("/viewData/{module}", func(rw http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("GET /viewData/{module}", func(rw http.ResponseWriter, r *http.Request) {
 		if w.store == nil {
 			rw.WriteHeader(http.StatusServiceUnavailable)
 			return
 		}
-		module := chi.URLParam(r, "module")
+		module := r.PathValue("module")
 		if module == "" {
 			rw.WriteHeader(http.StatusBadRequest)
 			return
@@ -302,7 +303,7 @@ func (w *Worker) router() http.Handler {
 				rw.WriteHeader(http.StatusInternalServerError)
 				return
 			}
-			w.cache.Set(module, out, 60)
+			w.cache.Set(module, out, time.Duration(60*time.Second)) // cache for 1 minute
 		}
 		json.NewEncoder(rw).Encode(out)
 	})
@@ -370,7 +371,7 @@ func (w *Worker) logEverySecond(ctx context.Context) {
 		}
 
 		temp = 0
-		// Current temperature as reported by thermal zone (sensor), millidegree Celsius
+		// current temperature as reported by thermal zone (sensor), millidegree Celsius
 		// https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-class-thermal
 		sysTemp, err := os.ReadFile("/sys/class/thermal/thermal_zone0/temp")
 		if err != nil {
@@ -512,7 +513,7 @@ type Options struct {
 }
 
 func main() {
-	// Parsing cmd parameters
+	// parsing cmd parameters
 	var opts Options
 	p := flags.NewParser(&opts, flags.PassDoubleDash|flags.HelpFlag)
 	if _, err := p.Parse(); err != nil {
@@ -534,7 +535,7 @@ func main() {
 		conf.Server.Dbg = opts.Dbg
 	}
 
-	// Logger setup
+	// logger setup
 	logOpts := []lgr.Option{
 		lgr.LevelBraces,
 		lgr.StackTraceOnError,
@@ -544,7 +545,7 @@ func main() {
 	}
 	lgr.SetupStdLogger(logOpts...)
 
-	// Graceful termination
+	// graceful termination
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		// catch signal and invoke graceful termination

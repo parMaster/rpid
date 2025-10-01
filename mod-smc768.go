@@ -93,7 +93,7 @@ func (r *Smc768Reporter) ReadSMC768() Smc768Data {
 
 	data := make(Smc768Data)
 
-	// Read the data from the SMC768 and store it in the data map
+	// read the data from the SMC768 and store it in the data map
 	for i := 1; i <= 60; i++ {
 		value := ReadInput(fmt.Sprintf("/sys/devices/platform/applesmc.768/temp%d_input", i))
 		label := ReadInput(fmt.Sprintf("/sys/devices/platform/applesmc.768/temp%d_label", i))

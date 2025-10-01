@@ -34,8 +34,8 @@ func LoadBmp280Reporter(cfg config.BMP280, i2cBus i2c.BusCloser, store storage.S
 	}
 
 	data := map[string][]ShortFloat{
-		"pressure": {}, // Atmospheric pressure from BMP280 in hPa
-		"temp":     {}, // Temperature from BMP280 in mC
+		"pressure": {}, // atmospheric pressure from BMP280 in hPa
+		"temp":     {}, // temperature from BMP280 in mC
 	}
 
 	bmp280Device, err := bmxx80.NewI2C(i2cBus, cfg.Bmp280Addr, &bmxx80.DefaultOpts)

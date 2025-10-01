@@ -18,8 +18,7 @@ test:
 info:
 	- @echo "revision $(REV)"
 
-deploy:
-	make build
+deploy: build
 	sudo systemctl stop rpid.service || true
 	sudo cp dist/rpid /usr/bin/
 	sed -i "s/%USER%/$(USER)/g" dist/rpid.service

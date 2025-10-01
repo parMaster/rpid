@@ -26,7 +26,7 @@ func LoadHtu21Reporter(cfg config.HTU21, i2cBus i2c.BusCloser) (*Htu21Reporter, 
 		return nil, fmt.Errorf("Htu21Reporter is not enabled")
 	}
 	data := historical{
-		"humidity": {}, // Humidity from HTU21 in mRh
+		"humidity": {}, // humidity from HTU21 in mRh
 		"temp":     {}, // unused
 	}
 
